@@ -39,7 +39,8 @@ public class Subject {
     @Column(nullable = false)
     private String teachingType;
 
-    private String group;
+    @Column(name = "group_name")
+    private String groupName;
 
     @ManyToOne
     @JoinColumn(name = "created_by", nullable = false)
