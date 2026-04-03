@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import keycloak from './keycloak'
+import Dashboard from './pages/zaposleni/Dashboard'
 
 function App() {
   const roles = keycloak.tokenParsed?.realm_access?.roles || []
@@ -12,7 +13,7 @@ function App() {
         <nav className="bg-blue-600 text-white p-4 flex justify-between items-center">
           <h1 className="text-xl font-bold">QR Attendance</h1>
           <div className="flex items-center gap-4">
-            <span>{keycloak.tokenParsed?.email}</span>
+            <span className="text-sm">{keycloak.tokenParsed?.email}</span>
             <button
               onClick={() => keycloak.logout()}
               className="bg-white text-blue-600 px-3 py-1 rounded font-medium hover:bg-gray-100"
@@ -23,9 +24,16 @@ function App() {
         </nav>
 
         <main className="p-6">
-          {isZaposleni && <p className="text-green-600 font-bold">Ulogovani ste kao Zaposleni</p>}
-          {isStudent && <p className="text-blue-600 font-bold">Ulogovani ste kao Student</p>}
-          {!isZaposleni && !isStudent && <p className="text-red-600">Nemate dodijeljenu ulogu!</p>}
+          {isZaposleni && <Dashboard />}
+          {isStudent && (
+            <div className="text-center mt-10">
+              <h2 className="text-2xl font-bold text-gray-800">Dobrodošli, studente!</h2>
+              <p className="text-gray-500 mt-2">Skenirajte QR kod da evidentirate prisustvo.</p>
+            </div>
+          )}
+          {!isZaposleni && !isStudent && (
+            <p className="text-red-600">Nemate dodijeljenu ulogu!</p>
+          )}
         </main>
       </div>
     </BrowserRouter>

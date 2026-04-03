@@ -41,15 +41,24 @@ public class SecurityConfig {
     }
 
     @Bean
-    public JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter converter = new JwtGrantedAuthoritiesConverter();
-        converter.setAuthoritiesClaimName("realm_access.roles");
-        converter.setAuthorityPrefix("ROLE_");
-
-        JwtAuthenticationConverter jwtConverter = new JwtAuthenticationConverter();
-        jwtConverter.setJwtGrantedAuthoritiesConverter(converter);
-        return jwtConverter;
-    }
+public JwtAuthenticationConverter jwtAuthenticationConverter() {
+    JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+    converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+        var authorities = new java.util.ArrayList<org.springframework.security.core.GrantedAuthority>();
+        
+        var realmAccess = jwt.getClaimAsMap("realm_access");
+        if (realmAccess != null) {
+            var roles = (java.util.List<?>) realmAccess.get("roles");
+            if (roles != null) {
+                roles.forEach(role -> 
+                    authorities.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + role))
+                );
+            }
+        }
+        return authorities;
+    });
+    return converter;
+}
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
