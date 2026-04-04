@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import api from '../../api/axiosInstance'
-import keycloak from '../../keycloak'
+import UploadModal from '../../components/UploadModal'
 
 function Dashboard() {
   const [subjects, setSubjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showUpload, setShowUpload] = useState(false)
 
   useEffect(() => {
     fetchSubjects()
@@ -26,8 +27,11 @@ function Dashboard() {
     <div className="max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Moji predmeti</h2>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-          + Novi predmet
+        <button
+          onClick={() => setShowUpload(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          + Dodaj predmet
         </button>
       </div>
 
@@ -54,6 +58,9 @@ function Dashboard() {
               <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded">
                 Semester {subject.semester}
               </span>
+              <span className="bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded">
+                {subject.teachingType}
+              </span>
             </div>
             <button className="mt-4 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 text-sm">
               Upravljaj sesijama
@@ -61,6 +68,13 @@ function Dashboard() {
           </div>
         ))}
       </div>
+
+      {showUpload && (
+        <UploadModal
+          onClose={() => setShowUpload(false)}
+          onSuccess={fetchSubjects}
+        />
+      )}
     </div>
   )
 }
