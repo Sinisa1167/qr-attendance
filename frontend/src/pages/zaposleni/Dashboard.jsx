@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import api from '../../api/axiosInstance'
 import UploadModal from '../../components/UploadModal'
+import { useNavigate } from 'react-router-dom'
 
 function Dashboard() {
   const [subjects, setSubjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showUpload, setShowUpload] = useState(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
     fetchSubjects()
@@ -62,9 +64,11 @@ function Dashboard() {
                 {subject.teachingType}
               </span>
             </div>
-            <button className="mt-4 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 text-sm">
+            <button
+            onClick={() => navigate(`/subject/${subject.id}`)}
+            className="mt-4 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 text-sm">
               Upravljaj sesijama
-            </button>
+          </button>
           </div>
         ))}
       </div>

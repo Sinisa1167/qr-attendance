@@ -7,6 +7,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.io.IOException;
 import java.text.Normalizer;
@@ -23,6 +24,14 @@ public class ExcelParserService {
     private String studentEmailDomain;
 
     public Subject parseAndSave(MultipartFile file, User createdBy) throws IOException {
+        String filename = file.getOriginalFilename();
+        if (filename != null && filename.endsWith(".csv")) {
+            return parseAndSaveCsv(file, createdBy);
+        }
+        return parseAndSaveXlsx(file, createdBy);
+    }
+
+    public Subject parseAndSaveXlsx(MultipartFile file, User createdBy) throws IOException {
 
         try (Workbook workbook = new XSSFWorkbook(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
@@ -83,6 +92,71 @@ public class ExcelParserService {
             savedSubject.setStudents(students);
             return subjectService.save(savedSubject);
         }
+    }
+
+    private Subject parseAndSaveCsv(MultipartFile file, User createdBy) throws IOException {
+        try (var reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(file.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+
+            List<String[]> rows = new ArrayList<>();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                rows.add(line.split(";"));
+            }
+
+            // Metapodaci u redu 4 (index 4)
+            String[] metaRow = rows.get(4);
+
+            Subject subject = new Subject();
+            subject.setName(getcsv(metaRow, 7));
+            subject.setCode(getcsv(metaRow, 9));
+            subject.setStudyProgram(getcsv(metaRow, 11));
+            subject.setStudyType(getcsv(metaRow, 13));
+            subject.setStudyYear(parseInt(getcsv(metaRow, 15)));
+            subject.setSemester(parseInt(getcsv(metaRow, 17)));
+            subject.setTeachingType(getcsv(metaRow, 19));
+            subject.setGroupName(getcsv(metaRow, 21));
+            subject.setCreatedBy(createdBy);
+
+            Subject savedSubject = subjectService.save(subject);
+
+            // Pronadji pocetak studenata
+            int startRow = 7;
+            for (int i = 0; i < Math.min(20, rows.size()); i++) {
+                String[] row = rows.get(i);
+                if (row.length > 1 && (row[1].toLowerCase().contains("презиме") 
+                    || row[1].toLowerCase().contains("prezime"))) {
+                    startRow = i + 1;
+                    break;
+                }
+            }
+
+            List<User> students = new ArrayList<>();
+            for (int i = startRow; i < rows.size(); i++) {
+                String[] row = rows.get(i);
+                if (row.length < 4) continue;
+
+                String lastName = getcsv(row, 1);
+                String firstName = getcsv(row, 2);
+                String indexNumber = getcsv(row, 3);
+
+                if (indexNumber.isBlank()) break;
+                if (firstName.isBlank() || lastName.isBlank()) continue;
+
+                String email = generateEmail(firstName, lastName);
+                User student = userService.findByEmail(email)
+                        .orElseGet(() -> createNewStudent(firstName, lastName, email));
+                students.add(student);
+            }
+
+            savedSubject.setStudents(students);
+            return subjectService.save(savedSubject);
+        }
+    }
+
+    private String getcsv(String[] row, int col) {
+        if (row == null || col >= row.length) return "";
+        return row[col].trim().replace("\"", "");
     }
 
     private String getCell(Row row, int col, DataFormatter formatter) {

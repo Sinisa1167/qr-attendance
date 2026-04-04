@@ -1,6 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import keycloak from './keycloak'
 import Dashboard from './pages/zaposleni/Dashboard'
+import Sessions from './pages/zaposleni/Sessions'
+import LiveSession from './pages/zaposleni/LiveSession'
+
 
 function App() {
   const roles = keycloak.tokenParsed?.realm_access?.roles || []
@@ -24,7 +27,13 @@ function App() {
         </nav>
 
         <main className="p-6">
-          {isZaposleni && <Dashboard />}
+          {isZaposleni && (
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/subject/:subjectId" element={<Sessions />} />
+              <Route path="/session/:sessionId/live" element={<LiveSession />} />
+            </Routes>
+          )}
           {isStudent && (
             <div className="text-center mt-10">
               <h2 className="text-2xl font-bold text-gray-800">Dobrodošli, studente!</h2>
