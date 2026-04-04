@@ -5,9 +5,9 @@ import com.qrattendance.backend.model.User;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.beans.factory.annotation.Value;
 
 import java.io.IOException;
 import java.text.Normalizer;
@@ -32,42 +32,29 @@ public class ExcelParserService {
     }
 
     public Subject parseAndSaveXlsx(MultipartFile file, User createdBy) throws IOException {
-
         try (Workbook workbook = new XSSFWorkbook(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
             DataFormatter formatter = new DataFormatter();
 
-            // metapodaci – fiksne kolone (template fakulteta)
             Row metaRow = sheet.getRow(4);
             if (metaRow == null) {
                 throw new IllegalArgumentException("Neispravan Excel format – nema reda sa metapodacima (red 5).");
             }
 
-            String subjectName = getCell(metaRow, 7, formatter);
-            String subjectCode = getCell(metaRow, 9, formatter);
-            String studyProgram = getCell(metaRow, 11, formatter);
-            String studyType = getCell(metaRow, 13, formatter);
-            String studyYearStr = getCell(metaRow, 15, formatter);
-            String semesterStr = getCell(metaRow, 17, formatter);
-            String teachingType = getCell(metaRow, 19, formatter);
-            String groupName = getCell(metaRow, 21, formatter);
-
             Subject subject = new Subject();
-            subject.setName(subjectName);
-            subject.setCode(subjectCode);
-            subject.setStudyProgram(studyProgram);
-            subject.setStudyType(studyType);
-            subject.setStudyYear(parseInt(studyYearStr));
-            subject.setSemester(parseInt(semesterStr));
-            subject.setTeachingType(teachingType);
-            subject.setGroupName(groupName);
+            subject.setName(getCell(metaRow, 7, formatter));
+            subject.setCode(getCell(metaRow, 9, formatter));
+            subject.setStudyProgram(getCell(metaRow, 11, formatter));
+            subject.setStudyType(getCell(metaRow, 13, formatter));
+            subject.setStudyYear(parseInt(getCell(metaRow, 15, formatter)));
+            subject.setSemester(parseInt(getCell(metaRow, 17, formatter)));
+            subject.setTeachingType(getCell(metaRow, 19, formatter));
+            subject.setGroupName(getCell(metaRow, 21, formatter));
             subject.setCreatedBy(createdBy);
 
             Subject savedSubject = subjectService.save(subject);
 
-            //  studenti – dinamicki pronalazak pocetka
             int startRow = findStudentStartRow(sheet, formatter);
-
             List<User> students = new ArrayList<>();
 
             for (int i = startRow; i <= sheet.getLastRowNum(); i++) {
@@ -78,14 +65,12 @@ public class ExcelParserService {
                 String firstName = getCell(row, 2, formatter);
                 String indexNumber = getCell(row, 3, formatter);
 
-                if (indexNumber.isBlank()) break;                    // kraj liste studenata
+                if (indexNumber.isBlank()) break;
                 if (firstName.isBlank() || lastName.isBlank()) continue;
 
                 String email = generateEmail(firstName, lastName);
-
                 User student = userService.findByEmail(email)
                         .orElseGet(() -> createNewStudent(firstName, lastName, email));
-
                 students.add(student);
             }
 
@@ -104,7 +89,6 @@ public class ExcelParserService {
                 rows.add(line.split(";"));
             }
 
-            // Metapodaci u redu 4 (index 4)
             String[] metaRow = rows.get(4);
 
             Subject subject = new Subject();
@@ -120,12 +104,11 @@ public class ExcelParserService {
 
             Subject savedSubject = subjectService.save(subject);
 
-            // Pronadji pocetak studenata
             int startRow = 7;
             for (int i = 0; i < Math.min(20, rows.size()); i++) {
                 String[] row = rows.get(i);
-                if (row.length > 1 && (row[1].toLowerCase().contains("презиме") 
-                    || row[1].toLowerCase().contains("prezime"))) {
+                if (row.length > 1 && (row[1].toLowerCase().contains("презиме")
+                        || row[1].toLowerCase().contains("prezime"))) {
                     startRow = i + 1;
                     break;
                 }
@@ -154,16 +137,16 @@ public class ExcelParserService {
         }
     }
 
-    private String getcsv(String[] row, int col) {
-        if (row == null || col >= row.length) return "";
-        return row[col].trim().replace("\"", "");
-    }
-
     private String getCell(Row row, int col, DataFormatter formatter) {
         if (row == null) return "";
         Cell cell = row.getCell(col);
         if (cell == null) return "";
         return formatter.formatCellValue(cell).trim();
+    }
+
+    private String getcsv(String[] row, int col) {
+        if (row == null || col >= row.length) return "";
+        return row[col].trim().replace("\"", "");
     }
 
     private Integer parseInt(String value) {
@@ -179,7 +162,6 @@ public class ExcelParserService {
         for (int i = 0; i < 20; i++) {
             Row row = sheet.getRow(i);
             if (row == null) continue;
-
             String cellValue = getCell(row, 1, formatter).toLowerCase();
             if (cellValue.contains("презиме") || cellValue.contains("prezime")) {
                 return i + 1;
@@ -207,7 +189,6 @@ public class ExcelParserService {
         String latin = toLatin(input);
         String normalized = Normalizer.normalize(latin, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "");
-
         return normalized.toLowerCase()
                 .replaceAll("[^a-z0-9]", "");
     }
@@ -222,7 +203,6 @@ public class ExcelParserService {
                 .replace("С", "S").replace("Т", "T").replace("Ћ", "C").replace("У", "U")
                 .replace("Ф", "F").replace("Х", "H").replace("Ц", "C").replace("Ч", "C")
                 .replace("Џ", "Dz").replace("Ш", "S")
-
                 .replace("а", "a").replace("б", "b").replace("в", "v").replace("г", "g")
                 .replace("д", "d").replace("ђ", "dj").replace("е", "e").replace("ж", "z")
                 .replace("з", "z").replace("и", "i").replace("ј", "j").replace("к", "k")

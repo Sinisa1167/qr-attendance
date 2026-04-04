@@ -3,6 +3,7 @@ import keycloak from './keycloak'
 import Dashboard from './pages/zaposleni/Dashboard'
 import Sessions from './pages/zaposleni/Sessions'
 import LiveSession from './pages/zaposleni/LiveSession'
+import ScanQR from './pages/student/ScanQR'
 
 
 function App() {
@@ -35,10 +36,9 @@ function App() {
             </Routes>
           )}
           {isStudent && (
-            <div className="text-center mt-10">
-              <h2 className="text-2xl font-bold text-gray-800">Dobrodošli, studente!</h2>
-              <p className="text-gray-500 mt-2">Skenirajte QR kod da evidentirate prisustvo.</p>
-            </div>
+            <Routes>
+              <Route path="/" element={<ScanQR />} />
+            </Routes>
           )}
           {!isZaposleni && !isStudent && (
             <p className="text-red-600">Nemate dodijeljenu ulogu!</p>

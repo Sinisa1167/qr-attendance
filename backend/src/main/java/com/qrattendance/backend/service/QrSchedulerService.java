@@ -23,7 +23,7 @@ public class QrSchedulerService {
         qrTokenService.invalidateSessionToken(sessionId);
     }
 
-    @Scheduled(fixedRateString = "${app.qr-refresh-interval:30000}")
+    @Scheduled(fixedRateString = "${app.qr-refresh-interval:300000}")
     public void refreshTokens() {
         for (String sessionId : activeSessions) {
             try {

@@ -15,7 +15,7 @@ public class QrTokenService {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
-    private static final long TOKEN_VALIDITY_SECONDS = 30;
+    private static final long TOKEN_VALIDITY_SECONDS = 300;
     private static final String TOKEN_PREFIX = "qr:token:";
     private static final String SESSION_PREFIX = "qr:session:";
 
@@ -58,7 +58,15 @@ public class QrTokenService {
         if (obj == null) {
             throw new IllegalStateException("Token nije validan ili je istekao");
         }
-        return (QrToken) obj;
+        
+        // Konvertuj LinkedHashMap u QrToken
+        if (obj instanceof QrToken) {
+            return (QrToken) obj;
+        }
+        
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        return mapper.convertValue(obj, QrToken.class);
     }
 
     public void invalidateSessionToken(String sessionId) {
