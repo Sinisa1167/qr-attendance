@@ -64,13 +64,21 @@ public class ExcelParserService {
                 String lastName = getCell(row, 1, formatter);
                 String firstName = getCell(row, 2, formatter);
                 String indexNumber = getCell(row, 3, formatter);
+                String studentStatus = getCell(row, 4, formatter);
 
                 if (indexNumber.isBlank()) break;
                 if (firstName.isBlank() || lastName.isBlank()) continue;
 
                 String email = generateEmail(firstName, lastName);
+                String finalFirstName = firstName;
+                String finalLastName = lastName;
+                String finalIndexNumber = indexNumber;
+                String finalStudentStatus = studentStatus;
+
                 User student = userService.findByEmail(email)
-                        .orElseGet(() -> createNewStudent(firstName, lastName, email));
+                        .orElseGet(() -> createNewStudent(
+                                finalFirstName, finalLastName,
+                                email, finalIndexNumber, finalStudentStatus));
                 students.add(student);
             }
 
@@ -122,13 +130,21 @@ public class ExcelParserService {
                 String lastName = getcsv(row, 1);
                 String firstName = getcsv(row, 2);
                 String indexNumber = getcsv(row, 3);
+                String studentStatus = row.length > 4 ? getcsv(row, 4) : "";
 
                 if (indexNumber.isBlank()) break;
                 if (firstName.isBlank() || lastName.isBlank()) continue;
 
                 String email = generateEmail(firstName, lastName);
+                String finalFirstName = firstName;
+                String finalLastName = lastName;
+                String finalIndexNumber = indexNumber;
+                String finalStudentStatus = studentStatus;
+
                 User student = userService.findByEmail(email)
-                        .orElseGet(() -> createNewStudent(firstName, lastName, email));
+                        .orElseGet(() -> createNewStudent(
+                                finalFirstName, finalLastName,
+                                email, finalIndexNumber, finalStudentStatus));
                 students.add(student);
             }
 
@@ -170,12 +186,15 @@ public class ExcelParserService {
         return 7;
     }
 
-    private User createNewStudent(String firstName, String lastName, String email) {
+    private User createNewStudent(String firstName, String lastName,
+                                   String email, String indexNumber, String studentStatus) {
         User newUser = new User();
         newUser.setEmail(email);
         newUser.setFirstName(firstName);
         newUser.setLastName(lastName);
         newUser.setRole(User.UserRole.STUDENT);
+        newUser.setIndexNumber(indexNumber);
+        newUser.setStudentStatus(studentStatus);
         return userService.save(newUser);
     }
 

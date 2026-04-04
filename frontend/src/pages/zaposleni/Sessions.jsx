@@ -85,6 +85,20 @@ function Sessions() {
     }
   }
 
+  const downloadFile = async (url, filename) => {
+  try {
+    const response = await api.get(url, { responseType: 'blob' })
+    const blob = new Blob([response.data])
+    const link = document.createElement('a')
+    link.href = window.URL.createObjectURL(blob)
+    link.download = filename
+    link.click()
+    window.URL.revokeObjectURL(link.href)
+  } catch (err) {
+    console.error('Greška pri downloadu', err)
+  }
+}
+
   if (loading) return <p className="text-gray-500 p-6">Učitavanje...</p>
 
   return (
@@ -99,6 +113,20 @@ function Sessions() {
         <div>
           <h2 className="text-2xl font-bold text-gray-800">{subject?.name}</h2>
           <p className="text-gray-500 text-sm">{subject?.code} | {subject?.studyProgram}</p>
+          <div className="flex gap-2">
+  <button
+  onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/xlsx`, `prisustvo_${subjectId}.xlsx`)}
+  className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm"
+>
+  Export xlsx
+</button>
+<button
+  onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/pdf`, `prisustvo_${subjectId}.pdf`)}
+  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
+>
+  Export PDF
+</button>
+</div>
         </div>
       </div>
 
@@ -227,6 +255,22 @@ function Sessions() {
                   </button>
                 </>
               )}
+              {session.status === 'CLOSED' && (
+  <div className="flex gap-2">
+    <button
+  onClick={() => downloadFile(`/api/admin/export/session/${session.id}/xlsx`, `prisustvo_${session.id}.xlsx`)}
+  className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm"
+>
+  xlsx
+</button>
+<button
+  onClick={() => downloadFile(`/api/admin/export/session/${session.id}/pdf`, `prisustvo_${session.id}.pdf`)}
+  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
+>
+  PDF
+</button>
+  </div>
+)}
             </div>
           </div>
         ))}

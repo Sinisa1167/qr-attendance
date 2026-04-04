@@ -31,6 +31,12 @@ public class User {
     @Column(nullable = false)
     private UserRole role;
 
+    @Column
+    private String indexNumber;
+    
+    @Column
+    private String studentStatus;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
