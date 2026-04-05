@@ -9,11 +9,13 @@ function Sessions() {
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  
+  // Postavljamo današnji datum kao default
   const [newSession, setNewSession] = useState({
     activityType: 'PREDAVANJE',
-    date: '',
-    startTime: '',
-    endTime: '',  
+    date: new Date().toISOString().split('T')[0],
+    startTime: '08:00',
+    endTime: '09:30',   
   })
 
   useEffect(() => {
@@ -26,33 +28,41 @@ function Sessions() {
         api.get('/api/admin/subjects'),
         api.get(`/api/admin/sessions/subject/${subjectId}`)
       ])
-      const found = subjectsRes.data.find(s => s.id === subjectId)
+      
+      // FIX: Sigurnije poređenje ID-eva (string vs number)
+      const found = subjectsRes.data.find(s => s.id.toString() === subjectId.toString())
+      
       setSubject(found)
       setSessions(sessionsRes.data)
     } catch (err) {
-      console.error(err)
+      console.error("Greška pri učitavanju:", err)
     } finally {
       setLoading(false)
     }
   }
 
   const createSession = async () => {
+    if (!newSession.date || !newSession.startTime || !newSession.endTime) {
+      alert("Molimo popunite sva polja");
+      return;
+    }
     try {
       const sessionData = {
         subject: { id: subjectId },
         ...newSession,
-        groupNumber: subject?.groupName
+        groupNumber: subject?.groupName,
+        status: 'CREATED' // Eksplicitno postavljamo status
       }
       await api.post('/api/admin/sessions', sessionData)
       setShowCreateForm(false)
       fetchData()
     } catch (err) {
-      console.error(err)
+      alert("Greška pri kreiranju sesije")
     }
   }
 
   const deleteSession = async (sessionId) => {
-    if (!window.confirm('Da li ste sigurni da želite obrisati ovu sesiju?')) return
+    if (!window.confirm('Da li ste sigurni da želite obrisati ovu sesiju? Svi podaci o prisustvu će biti izgubljeni.')) return
     try {
       await api.delete(`/api/admin/sessions/${sessionId}`)
       fetchData()
@@ -66,11 +76,12 @@ function Sessions() {
       await api.post(`/api/admin/sessions/${sessionId}/activate`)
       navigate(`/session/${sessionId}/live`)
     } catch (err) {
-      console.error(err)
+      alert("Nije moguće aktivirati sesiju. Provjerite da li već postoji aktivna sesija.")
     }
   }
 
   const closeSession = async (sessionId) => {
+    if (!window.confirm('Zatvori sesiju? Nakon zatvaranja prijave više nisu moguće.')) return
     try {
       await api.post(`/api/admin/sessions/${sessionId}/close`)
       fetchData()
@@ -79,102 +90,107 @@ function Sessions() {
     }
   }
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'ACTIVE': return 'bg-green-100 text-green-700'
-      case 'CLOSED': return 'bg-gray-100 text-gray-700'
-      default: return 'bg-yellow-100 text-yellow-700'
-    }
-  }
-
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'ACTIVE': return 'Aktivna'
-      case 'CLOSED': return 'Zatvorena'
-      default: return 'Kreirana'
-    }
-  }
-
-  const formatDate = (date) => {
-    if (!date) return ''
-
-    const [year, month, day] = date.split('-')
-    return `${day}.${month}.${year}`
+  const sessionFilename = (session, ext) => {
+    const tip = (session.activityType || 'Sesija')
+      .replace(/_/g, '-')
+      .toLowerCase()
+    const datum = session.date
+      ? new Date(session.date).toLocaleDateString('de-DE').replace(/\./g, '-').replace(/-+$/, '')
+      : 'datum'
+    const grupa = subject?.groupName || session.groupNumber || '1'
+    return `Sesija_${tip}_${datum}_Grupa${grupa}.${ext}`
   }
 
   const downloadFile = async (url, filename) => {
-  try {
-    const response = await api.get(url, { responseType: 'blob' })
-    const blob = new Blob([response.data])
-    const link = document.createElement('a')
-    link.href = window.URL.createObjectURL(blob)
-    link.download = filename
-    link.click()
-    window.URL.revokeObjectURL(link.href)
-  } catch (err) {
-    console.error('Greška pri downloadu', err)
+    try {
+      const response = await api.get(url, { responseType: 'blob' })
+      const blob = new Blob([response.data])
+      const link = document.createElement('a')
+      link.href = window.URL.createObjectURL(blob)
+      link.download = filename
+      link.click()
+      window.URL.revokeObjectURL(link.href)
+    } catch (err) {
+      console.error('Greška pri downloadu', err)
+      alert("Greška prilikom generisanja fajla.")
+    }
   }
-}
 
-  if (loading) return <p className="text-gray-500 p-6">Učitavanje...</p>
+  const getStatusBadge = (status) => {
+    const styles = {
+      ACTIVE: 'bg-green-100 text-green-700 border-green-200 animate-pulse',
+      CLOSED: 'bg-gray-100 text-gray-700 border-gray-200',
+      CREATED: 'bg-blue-100 text-blue-700 border-blue-200'
+    }
+    const labels = { ACTIVE: 'Aktivna', CLOSED: 'Zatvorena', CREATED: 'Kreirana' }
+    
+    return (
+      <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full border ${styles[status] || styles.CREATED}`}>
+        {labels[status] || status}
+      </span>
+    )
+  }
+
+  if (loading) return (
+    <div className="flex justify-center items-center h-64">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+  )
 
   return (
-<div className="max-w-4xl mx-auto">
-  <div className="flex justify-between items-start mb-6">
-    <div>
-      <h2 className="text-2xl font-bold text-gray-800">{subject?.name} ({subject?.code})</h2>
-      <p className="text-gray-600 text-xs mb-2">Semestar {subject?.semester} | {subject?.studyProgram}</p>
-      <div className="flex gap-2">
-        <span className="bg-purple-200 text-purple-800 text-m px-2 py-1 rounded">
-          {subject?.teachingType}
-        </span>
-        <span className="bg-green-200 text-green-800 text-m px-2 py-1 rounded">
-          Grupa {subject?.groupName}
-        </span>
-      </div>
-    </div>
-    <div className="flex gap-2">
-      <button
-        onClick={() => downloadFile(
-          `/api/admin/export/subject/${subjectId}/xlsx`, 
-          `prisustvo_${subject?.code}_${subject?.teachingType?.substring(0,3)}_G${subject?.groupName}.xlsx`
-        )}
-        className="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
-      >
-        Export xlsx
-      </button>
-      <button
-        onClick={() => downloadFile(
-          `/api/admin/export/subject/${subjectId}/pdf`, 
-          `prisustvo_${subject?.code}_${subject?.teachingType?.substring(0,3)}_G${subject?.groupName}.pdf`
-        )}
-        className="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
-      >
-        Export PDF
-      </button>
-    </div>
-  </div>
+    <div className="max-w-5xl mx-auto p-4">
+      {/* SUBJECT INFO HEADER */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h2 className="text-3xl font-black text-gray-900">{subject?.name}</h2>
+          <div className="flex items-center gap-3 mt-2">
+            <span className="font-mono text-blue-600 font-bold">{subject?.code}</span>
+            <span className="text-gray-300">|</span>
+            <span className="text-gray-500 text-sm font-medium">{subject?.studyProgram} (Semestar {subject?.semester})</span>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <span className="bg-purple-50 text-purple-700 text-[10px] font-bold px-2 py-1 rounded border border-purple-100 uppercase uppercase tracking-wider">{subject?.teachingType}</span>
+            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-1 rounded border border-emerald-100 uppercase uppercase tracking-wider">Grupa {subject?.groupName}</span>
+          </div>
+        </div>
 
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-gray-700">Sesije</h3>
+        <div className="flex flex-col gap-2 w-full md:w-auto">
+          <button
+            onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/xlsx`, `Izvjestaj_${subject?.code}.xlsx`)}
+            className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 transition-all text-sm"
+          >
+            📊 Export XLSX
+          </button>
+          <button
+            onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/pdf`, `Izvjestaj_${subject?.code}.pdf`)}
+            className="flex items-center justify-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-red-600 transition-all text-sm"
+          >
+            📄 Export PDF
+          </button>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-xl font-bold text-gray-800">Istorija sesija</h3>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          className={`px-5 py-2 rounded-xl font-bold transition-all ${showCreateForm ? 'bg-gray-100 text-gray-600' : 'bg-blue-600 text-white shadow-lg shadow-blue-100'}`}
         >
-          + Nova sesija
+          {showCreateForm ? 'Zatvori' : '+ Nova sesija'}
         </button>
       </div>
 
+      {/* CREATE FORM */}
       {showCreateForm && (
-        <div className="bg-white rounded-lg shadow p-4 mb-4">
-          <h4 className="font-semibold mb-3">Kreiranje nove sesije</h4>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm text-gray-600">Tip aktivnosti</label>
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
+          <h4 className="font-bold text-blue-900 mb-4">Parametri nove sesije</h4>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="md:col-span-1">
+              <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1 ml-1">Tip</label>
               <select
                 value={newSession.activityType}
                 onChange={(e) => setNewSession({...newSession, activityType: e.target.value})}
-                className="w-full border rounded p-2 mt-1"
+                className="w-full bg-white border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
               >
                 <option value="PREDAVANJE">Predavanje</option>
                 <option value="AUDITORNE_VJEZBE">Auditorne vježbe</option>
@@ -182,136 +198,108 @@ function Sessions() {
               </select>
             </div>
             <div>
-              <label className="text-sm text-gray-600">Datum</label>
+              <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1 ml-1">Datum</label>
               <input
                 type="date"
                 value={newSession.date}
                 onChange={(e) => setNewSession({...newSession, date: e.target.value})}
-                className="w-full border rounded p-2 mt-1"
+                className="w-full bg-white border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
               />
             </div>
             <div>
-              <label className="text-sm text-gray-600">Početak</label>
+              <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1 ml-1">Početak</label>
               <input
                 type="time"
                 value={newSession.startTime}
                 onChange={(e) => setNewSession({...newSession, startTime: e.target.value})}
-                className="w-full border rounded p-2 mt-1"
+                className="w-full bg-white border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
               />
             </div>
             <div>
-              <label className="text-sm text-gray-600">Kraj</label>
+              <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1 ml-1">Kraj</label>
               <input
                 type="time"
                 value={newSession.endTime}
                 onChange={(e) => setNewSession({...newSession, endTime: e.target.value})}
-                className="w-full border rounded p-2 mt-1"
+                className="w-full bg-white border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
               />
             </div>
           </div>
-          <div className="flex gap-3 mt-4 justify-end">
-            <button
-              onClick={() => setShowCreateForm(false)}
-              className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
-            >
-              Otkaži
-            </button>
+          <div className="flex justify-end mt-6">
             <button
               onClick={createSession}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
             >
-              Kreiraj
+              Potvrdi i kreiraj
             </button>
           </div>
         </div>
       )}
 
-      {sessions.length === 0 && (
-        <div className="bg-white rounded-lg p-8 text-center shadow">
-          <p className="text-gray-500">Nema sesija za ovaj predmet.</p>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {sessions.map((session) => (
-          <div key={session.id} className="bg-white rounded-lg shadow p-4 flex justify-between items-center">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-semibold">
-                  {session.activityType?.replace(/_/g, ' ')}
-                </span>
-                <span className={`text-xs px-2 py-1 rounded ${getStatusColor(session.status)}`}>
-                  {getStatusLabel(session.status)}
-                </span>
-              </div>
-              <p className="text-gray-500 text-sm">
-                {formatDate(session.date)} | {session.startTime?.substring(0,5)} - {session.endTime?.substring(0,5)}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {session.status === 'CREATED' && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => activateSession(session.id)}
-                    className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm"
-                  >
-                    Aktiviraj
-                  </button>
-                  <button
-                    onClick={() => deleteSession(session.id)}
-                    className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
-                  >
-                    Obriši
-                  </button>
-                </div>
-              )}
-              {session.status === 'ACTIVE' && (
-                <>
-                  <button
-                    onClick={() => navigate(`/session/${session.id}/live`)}
-                    className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 text-sm"
-                  >
-                    Dashboard
-                  </button>
-                  <button
-                    onClick={() => closeSession(session.id)}
-                    className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
-                  >
-                    Zatvori
-                  </button>
-                </>
-              )}
-              {session.status === 'CLOSED' && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => downloadFile(
-                      `/api/admin/export/session/${session.id}/xlsx`, 
-                      `prisustvo_${subject?.code}_G${subject?.groupName}_${formatDate(session.date)}.xlsx`
-                    )}
-                    className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm"
-                  >
-                    xlsx
-                  </button>
-                  <button
-                    onClick={() => downloadFile(
-                      `/api/admin/export/session/${session.id}/pdf`, 
-                      `prisustvo_${subject?.code}_G${subject?.groupName}_${formatDate(session.date)}.pdf`
-                    )}
-                    className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
-                  >
-                    PDF
-                  </button>
-                  <button
-                    onClick={() => deleteSession(session.id)}
-                    className="border border-red-300 text-red-600 px-3 py-1 rounded hover:bg-red-50 text-sm"
-                  >
-                    Obriši
-                  </button>
-                </div>
-              )}
-            </div>
+      {/* SESSIONS LIST */}
+      <div className="space-y-4">
+        {sessions.length === 0 ? (
+          <div className="bg-white rounded-2xl p-12 text-center border border-dashed border-gray-200">
+            <p className="text-gray-400 font-medium italic">Nema evidentiranih sesija za ovaj predmet.</p>
           </div>
-        ))}
+        ) : (
+          sessions.map((session) => (
+            <div key={session.id} className="group bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className={`p-3 rounded-xl ${session.status === 'ACTIVE' ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-400'}`}>
+                   📅
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold text-gray-800">
+                      {session.activityType?.replace(/_/g, ' ')}
+                    </span>
+                    {getStatusBadge(session.status)}
+                  </div>
+                  <p className="text-gray-500 text-xs font-mono font-medium">
+                    {new Date(session.date).toLocaleDateString('de-DE')} | {session.startTime?.substring(0,5)} - {session.endTime?.substring(0,5)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 w-full md:w-auto justify-end">
+                {session.status === 'CREATED' && (
+                  <>
+                    <button onClick={() => activateSession(session.id)} className="flex-1 md:flex-none bg-green-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-green-700 transition-all text-xs">
+                      Aktiviraj
+                    </button>
+                    <button onClick={() => deleteSession(session.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
+                      🗑️
+                    </button>
+                  </>
+                )}
+                {session.status === 'ACTIVE' && (
+                  <>
+                    <button onClick={() => navigate(`/session/${session.id}/live`)} className="flex-1 md:flex-none bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 transition-all text-xs">
+                      Live Monitor
+                    </button>
+                    <button onClick={() => closeSession(session.id)} className="flex-1 md:flex-none bg-red-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-red-600 transition-all text-xs">
+                      Zatvori
+                    </button>
+                  </>
+                )}
+                {session.status === 'CLOSED' && (
+                  <div className="flex gap-2 items-center">
+                    <button onClick={() => downloadFile(`/api/admin/export/session/${session.id}/xlsx`, sessionFilename(session, 'xlsx'))} className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-lg font-bold hover:bg-emerald-100 transition-all text-[10px] uppercase border border-emerald-100">
+                      xlsx
+                    </button>
+                    <button onClick={() => downloadFile(`/api/admin/export/session/${session.id}/pdf`, sessionFilename(session, 'pdf'))} className="bg-red-50 text-red-700 px-3 py-2 rounded-lg font-bold hover:bg-red-100 transition-all text-[10px] uppercase border border-red-100">
+                      pdf
+                    </button>
+                    <button onClick={() => deleteSession(session.id)} className="ml-2 p-2 text-gray-300 hover:text-red-500 transition-colors">
+                      🗑️
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   )

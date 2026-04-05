@@ -31,12 +31,13 @@ public class SubjectService {
         subjectRepository.deleteById(id);
     }
 
-    public boolean isStudentEnrolled(Subject subject, User student) {
-        return subject.getStudents().contains(student);
+    public boolean isStudentEnrolled(String subjectId, String studentId) {
+        // Koristi optimizovani SQL EXISTS upit umjesto učitavanja cijele liste u memoriju
+        return subjectRepository.existsByIdAndStudents_Id(subjectId, studentId);
     }
 
     public Subject enrollStudent(Subject subject, User student) {
-        if (!isStudentEnrolled(subject, student)) {
+        if (!isStudentEnrolled(subject.getId(), student.getId())) {
             subject.getStudents().add(student);
             return subjectRepository.save(subject);
         }
@@ -44,8 +45,8 @@ public class SubjectService {
     }
 
     public boolean existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
-        String code, String teachingType, String groupName, String academicYear) {
-    return subjectRepository.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
-        code, teachingType, groupName, academicYear);
-}
+            String code, String teachingType, String groupName, String academicYear) {
+        return subjectRepository.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
+                code, teachingType, groupName, academicYear);
+    }
 }

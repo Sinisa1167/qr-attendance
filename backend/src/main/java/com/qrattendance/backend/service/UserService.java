@@ -16,22 +16,17 @@ public class UserService {
 
     public User getOrCreateUser(Jwt jwt) {
         String email = jwt.getClaimAsString("email");
-        String firstName = jwt.getClaimAsString("given_name");
-        String lastName = jwt.getClaimAsString("family_name");
+        
+        User user = userRepository.findByEmail(email).orElseGet(() -> {
+            User newUser = new User();
+            newUser.setEmail(email);
+            return newUser;
+        });
 
-        Optional<User> existing = userRepository.findByEmail(email);
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-
-        // uloga na osnovu keycloak realm_access.roles
-        User.UserRole role = determineRole(jwt);
-
-        User user = new User();
-        user.setEmail(email);
-        user.setFirstName(firstName);
-        user.setLastName(lastName);
-        user.setRole(role);
+        // Sinhronizacija: Uvijek osvježi podatke iz JWT-a
+        user.setFirstName(jwt.getClaimAsString("given_name"));
+        user.setLastName(jwt.getClaimAsString("family_name"));
+        user.setRole(determineRole(jwt));
 
         return userRepository.save(user);
     }

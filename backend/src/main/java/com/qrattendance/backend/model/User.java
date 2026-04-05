@@ -1,51 +1,53 @@
-package com.qrattendance.backend.model;
+    package com.qrattendance.backend.model;
 
-import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+    import jakarta.persistence.*;
+    import lombok.Data;
+    import lombok.NoArgsConstructor;
+    import lombok.AllArgsConstructor;
+    import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+    import com.fasterxml.jackson.annotation.JsonIgnore;
 
-import java.time.LocalDateTime;
+    import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "users")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class User {
+    @Entity
+    @Table(name = "users")
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public class User {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
+        @Id
+        @GeneratedValue(strategy = GenerationType.UUID)
+        private String id;
 
-    @Column(unique = true, nullable = false)
-    private String email;
+        @Column(unique = true, nullable = false)
+        private String email;
 
-    @Column(nullable = false)
-    private String firstName;
+        @Column(nullable = false)
+        private String firstName;
 
-    @Column(nullable = false)
-    private String lastName;
+        @Column(nullable = false)
+        private String lastName;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private UserRole role;
+        @Enumerated(EnumType.STRING)
+        @Column(nullable = false)
+        private UserRole role;
 
-    @Column
-    private String indexNumber;
-    
-    @Column
-    private String studentStatus;
+        @Column
+        private String indexNumber;
+        
+        @Column
+        private String studentStatus;
 
-    @Column(nullable = false)
-    private LocalDateTime createdAt;
+        @Column(nullable = false)
+        private LocalDateTime createdAt;
 
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
+        @PrePersist
+        protected void onCreate() {
+            createdAt = LocalDateTime.now();
+        }
+
+        public enum UserRole {
+            ZAPOSLENI, STUDENT
+        }
     }
-
-    public enum UserRole {
-        ZAPOSLENI, STUDENT
-    }
-}

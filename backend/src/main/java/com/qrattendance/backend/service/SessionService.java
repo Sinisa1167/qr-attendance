@@ -33,6 +33,12 @@ public class SessionService {
     }
 
     public Session activateSession(Session session) {
+        // PROVJERA: Da li već postoji aktivna sesija za ovaj predmet?
+        List<Session> activeOnes = sessionRepository.findBySubjectAndStatus(session.getSubject(), Session.SessionStatus.ACTIVE);
+        if (!activeOnes.isEmpty() && !activeOnes.get(0).getId().equals(session.getId())) {
+            throw new IllegalStateException("Već postoji aktivna sesija za ovaj predmet.");
+        }
+
         session.setStatus(Session.SessionStatus.ACTIVE);
         session.setActivatedAt(LocalDateTime.now());
         return sessionRepository.save(session);

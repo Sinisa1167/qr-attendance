@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.time.LocalDateTime;
 
@@ -18,6 +19,7 @@ public class Attendance {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
+    @JsonIgnoreProperties({"session"})
     @ManyToOne
     @JoinColumn(name = "session_id", nullable = false)
     private Session session;

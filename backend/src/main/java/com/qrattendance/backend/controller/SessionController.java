@@ -120,9 +120,11 @@ public ResponseEntity<?> deleteSession(
             currentToken = token.getToken();
         }
 
+        // Dodajemo "expiresIn" i mijenjamo ključ u "token" radi frontenda
         return ResponseEntity.ok(Map.of(
                 "token", currentToken,
-                "sessionId", sessionId
+                "sessionId", sessionId,
+                "expiresIn", qrTokenService.getRefreshIntervalSeconds() 
         ));
     }
 }
