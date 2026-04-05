@@ -20,6 +20,10 @@ public class SessionService {
         return sessionRepository.save(session);
     }
 
+    public void deleteSession(String id) {
+        sessionRepository.deleteById(id);
+    }
+
     public Optional<Session> findById(String id) {
         return sessionRepository.findById(id);
     }

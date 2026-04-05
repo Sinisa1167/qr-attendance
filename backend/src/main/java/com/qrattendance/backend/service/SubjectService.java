@@ -42,4 +42,10 @@ public class SubjectService {
         }
         return subject;
     }
+
+    public boolean existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
+        String code, String teachingType, String groupName, String academicYear) {
+    return subjectRepository.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
+        code, teachingType, groupName, academicYear);
+}
 }

@@ -36,20 +36,39 @@ public class ExcelParserService {
             Sheet sheet = workbook.getSheetAt(0);
             DataFormatter formatter = new DataFormatter();
 
+            Row titleRow = sheet.getRow(1);
+            String titleText = getCell(titleRow, 0, formatter);
+            String academicYear = extractAcademicYear(titleText);
+
             Row metaRow = sheet.getRow(4);
             if (metaRow == null) {
                 throw new IllegalArgumentException("Neispravan Excel format – nema reda sa metapodacima (red 5).");
             }
 
+            // Ekstrakcija metapodataka za provjeru
+            String name = getCell(metaRow, 7, formatter);
+            String code = getCell(metaRow, 9, formatter);
+            String teachingType = getCell(metaRow, 19, formatter);
+            String groupName = getCell(metaRow, 21, formatter);
+
+            // --- PROVJERA DUPLIKATA ---
+            if (subjectService.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
+                    code, teachingType, groupName, academicYear)) {
+                throw new IllegalArgumentException(
+                        String.format("Predmet '%s' (Grupa: %s, Tip: %s) već postoji za akademsku godinu %s.", 
+                        name, groupName, teachingType, academicYear));
+            }
+
             Subject subject = new Subject();
-            subject.setName(getCell(metaRow, 7, formatter));
-            subject.setCode(getCell(metaRow, 9, formatter));
+            subject.setName(name);
+            subject.setCode(code);
             subject.setStudyProgram(getCell(metaRow, 11, formatter));
             subject.setStudyType(getCell(metaRow, 13, formatter));
             subject.setStudyYear(parseInt(getCell(metaRow, 15, formatter)));
             subject.setSemester(parseInt(getCell(metaRow, 17, formatter)));
-            subject.setTeachingType(getCell(metaRow, 19, formatter));
-            subject.setGroupName(getCell(metaRow, 21, formatter));
+            subject.setAcademicYear(academicYear);
+            subject.setTeachingType(teachingType);
+            subject.setGroupName(groupName);
             subject.setCreatedBy(createdBy);
 
             Subject savedSubject = subjectService.save(subject);
@@ -70,15 +89,9 @@ public class ExcelParserService {
                 if (firstName.isBlank() || lastName.isBlank()) continue;
 
                 String email = generateEmail(firstName, lastName);
-                String finalFirstName = firstName;
-                String finalLastName = lastName;
-                String finalIndexNumber = indexNumber;
-                String finalStudentStatus = studentStatus;
-
+                
                 User student = userService.findByEmail(email)
-                        .orElseGet(() -> createNewStudent(
-                                finalFirstName, finalLastName,
-                                email, finalIndexNumber, finalStudentStatus));
+                        .orElseGet(() -> createNewStudent(firstName, lastName, email, indexNumber, studentStatus));
                 students.add(student);
             }
 
@@ -97,17 +110,35 @@ public class ExcelParserService {
                 rows.add(line.split(";"));
             }
 
+            if (rows.size() < 5) throw new IllegalArgumentException("Neispravan CSV format.");
+
+            String titleText = rows.size() > 1 ? getcsv(rows.get(1), 0) : "";
+            String academicYear = extractAcademicYear(titleText);
+
             String[] metaRow = rows.get(4);
+            String name = getcsv(metaRow, 7);
+            String code = getcsv(metaRow, 9);
+            String teachingType = getcsv(metaRow, 19);
+            String groupName = getcsv(metaRow, 21);
+
+            // --- PROVJERA DUPLIKATA ---
+            if (subjectService.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
+                    code, teachingType, groupName, academicYear)) {
+                throw new IllegalArgumentException(
+                        String.format("Predmet '%s' (Grupa: %s, Tip: %s) već postoji za akademsku godinu %s.", 
+                        name, groupName, teachingType, academicYear));
+            }
 
             Subject subject = new Subject();
-            subject.setName(getcsv(metaRow, 7));
-            subject.setCode(getcsv(metaRow, 9));
+            subject.setName(name);
+            subject.setCode(code);
             subject.setStudyProgram(getcsv(metaRow, 11));
             subject.setStudyType(getcsv(metaRow, 13));
             subject.setStudyYear(parseInt(getcsv(metaRow, 15)));
             subject.setSemester(parseInt(getcsv(metaRow, 17)));
-            subject.setTeachingType(getcsv(metaRow, 19));
-            subject.setGroupName(getcsv(metaRow, 21));
+            subject.setAcademicYear(academicYear);
+            subject.setTeachingType(teachingType);
+            subject.setGroupName(groupName);
             subject.setCreatedBy(createdBy);
 
             Subject savedSubject = subjectService.save(subject);
@@ -136,15 +167,9 @@ public class ExcelParserService {
                 if (firstName.isBlank() || lastName.isBlank()) continue;
 
                 String email = generateEmail(firstName, lastName);
-                String finalFirstName = firstName;
-                String finalLastName = lastName;
-                String finalIndexNumber = indexNumber;
-                String finalStudentStatus = studentStatus;
 
                 User student = userService.findByEmail(email)
-                        .orElseGet(() -> createNewStudent(
-                                finalFirstName, finalLastName,
-                                email, finalIndexNumber, finalStudentStatus));
+                        .orElseGet(() -> createNewStudent(firstName, lastName, email, indexNumber, studentStatus));
                 students.add(student);
             }
 
@@ -152,6 +177,8 @@ public class ExcelParserService {
             return subjectService.save(savedSubject);
         }
     }
+
+    // --- POMOĆNE METODE ---
 
     private String getCell(Row row, int col, DataFormatter formatter) {
         if (row == null) return "";
@@ -212,7 +239,23 @@ public class ExcelParserService {
                 .replaceAll("[^a-z0-9]", "");
     }
 
+    private String extractAcademicYear(String title) {
+        try {   
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\d{4}");
+            java.util.regex.Matcher matcher = pattern.matcher(title);
+            if (matcher.find()) {
+                int year = Integer.parseInt(matcher.group());
+                int nextYear = (year + 1) % 100;
+                return year + "/" + String.format("%02d", nextYear);
+            }
+        } catch (Exception e) {
+            // ignorisi
+        }
+        return "Nepoznato";
+    }
+
     private String toLatin(String input) {
+        if (input == null) return "";
         return input
                 .replace("А", "A").replace("Б", "B").replace("В", "V").replace("Г", "G")
                 .replace("Д", "D").replace("Ђ", "Dj").replace("Е", "E").replace("Ж", "Z")
@@ -228,7 +271,8 @@ public class ExcelParserService {
                 .replace("л", "l").replace("љ", "lj").replace("м", "m").replace("н", "n")
                 .replace("њ", "nj").replace("о", "o").replace("п", "p").replace("р", "r")
                 .replace("с", "s").replace("т", "t").replace("ћ", "c").replace("у", "u")
-                .replace("ф", "f").replace("х", "h").replace("ц", "c").replace("ч", "c")
-                .replace("џ", "dz").replace("ш", "s");
+                .replace("ф", "f").replace("х", "h").replace("ц", "c").replace("č", "c")
+                .replace("ć", "c").replace("ž", "z").replace("š", "s").replace("đ", "dj")
+                .replace("ч", "c").replace("џ", "dz").replace("ш", "s");
     }
 }

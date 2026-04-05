@@ -13,8 +13,7 @@ function Sessions() {
     activityType: 'PREDAVANJE',
     date: '',
     startTime: '',
-    endTime: '',
-    groupNumber: 1
+    endTime: '',  
   })
 
   useEffect(() => {
@@ -41,13 +40,24 @@ function Sessions() {
     try {
       const sessionData = {
         subject: { id: subjectId },
-        ...newSession
+        ...newSession,
+        groupNumber: subject?.groupName
       }
       await api.post('/api/admin/sessions', sessionData)
       setShowCreateForm(false)
       fetchData()
     } catch (err) {
       console.error(err)
+    }
+  }
+
+  const deleteSession = async (sessionId) => {
+    if (!window.confirm('Da li ste sigurni da želite obrisati ovu sesiju?')) return
+    try {
+      await api.delete(`/api/admin/sessions/${sessionId}`)
+      fetchData()
+    } catch (err) {
+      alert(err.response?.data?.error || 'Greška pri brisanju sesije')
     }
   }
 
@@ -85,6 +95,13 @@ function Sessions() {
     }
   }
 
+  const formatDate = (date) => {
+    if (!date) return ''
+
+    const [year, month, day] = date.split('-')
+    return `${day}.${month}.${year}`
+  }
+
   const downloadFile = async (url, filename) => {
   try {
     const response = await api.get(url, { responseType: 'blob' })
@@ -102,33 +119,41 @@ function Sessions() {
   if (loading) return <p className="text-gray-500 p-6">Učitavanje...</p>
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={() => navigate('/')}
-          className="text-blue-600 hover:underline"
-        >
-          ← Nazad
-        </button>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">{subject?.name}</h2>
-          <p className="text-gray-500 text-sm">{subject?.code} | {subject?.studyProgram}</p>
-          <div className="flex gap-2">
-  <button
-  onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/xlsx`, `prisustvo_${subjectId}.xlsx`)}
-  className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm"
->
-  Export xlsx
-</button>
-<button
-  onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/pdf`, `prisustvo_${subjectId}.pdf`)}
-  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
->
-  Export PDF
-</button>
-</div>
-        </div>
+<div className="max-w-4xl mx-auto">
+  <div className="flex justify-between items-start mb-6">
+    <div>
+      <h2 className="text-2xl font-bold text-gray-800">{subject?.name} ({subject?.code})</h2>
+      <p className="text-gray-600 text-xs mb-2">Semestar {subject?.semester} | {subject?.studyProgram}</p>
+      <div className="flex gap-2">
+        <span className="bg-purple-200 text-purple-800 text-m px-2 py-1 rounded">
+          {subject?.teachingType}
+        </span>
+        <span className="bg-green-200 text-green-800 text-m px-2 py-1 rounded">
+          Grupa {subject?.groupName}
+        </span>
       </div>
+    </div>
+    <div className="flex gap-2">
+      <button
+        onClick={() => downloadFile(
+          `/api/admin/export/subject/${subjectId}/xlsx`, 
+          `prisustvo_${subject?.code}_${subject?.teachingType?.substring(0,3)}_G${subject?.groupName}.xlsx`
+        )}
+        className="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
+      >
+        Export xlsx
+      </button>
+      <button
+        onClick={() => downloadFile(
+          `/api/admin/export/subject/${subjectId}/pdf`, 
+          `prisustvo_${subject?.code}_${subject?.teachingType?.substring(0,3)}_G${subject?.groupName}.pdf`
+        )}
+        className="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
+      >
+        Export PDF
+      </button>
+    </div>
+  </div>
 
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-gray-700">Sesije</h3>
@@ -183,16 +208,6 @@ function Sessions() {
                 className="w-full border rounded p-2 mt-1"
               />
             </div>
-            <div>
-              <label className="text-sm text-gray-600">Broj grupe</label>
-              <input
-                type="number"
-                value={newSession.groupNumber}
-                onChange={(e) => setNewSession({...newSession, groupNumber: parseInt(e.target.value)})}
-                className="w-full border rounded p-2 mt-1"
-                min="1"
-              />
-            </div>
           </div>
           <div className="flex gap-3 mt-4 justify-end">
             <button
@@ -222,22 +237,33 @@ function Sessions() {
           <div key={session.id} className="bg-white rounded-lg shadow p-4 flex justify-between items-center">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="font-semibold">{session.activityType?.replace(/_/g, ' ')}</span>
+                <span className="font-semibold">
+                  {session.activityType?.replace(/_/g, ' ')}
+                </span>
                 <span className={`text-xs px-2 py-1 rounded ${getStatusColor(session.status)}`}>
                   {getStatusLabel(session.status)}
                 </span>
               </div>
-              <p className="text-gray-500 text-sm">{session.date} | {session.startTime} - {session.endTime}</p>
-              <p className="text-gray-500 text-sm">Grupa: {session.groupNumber}</p>
+              <p className="text-gray-500 text-sm">
+                {formatDate(session.date)} | {session.startTime?.substring(0,5)} - {session.endTime?.substring(0,5)}
+              </p>
             </div>
             <div className="flex gap-2">
               {session.status === 'CREATED' && (
-                <button
-                  onClick={() => activateSession(session.id)}
-                  className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm"
-                >
-                  Aktiviraj
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => activateSession(session.id)}
+                    className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm"
+                  >
+                    Aktiviraj
+                  </button>
+                  <button
+                    onClick={() => deleteSession(session.id)}
+                    className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
+                  >
+                    Obriši
+                  </button>
+                </div>
               )}
               {session.status === 'ACTIVE' && (
                 <>
@@ -256,21 +282,33 @@ function Sessions() {
                 </>
               )}
               {session.status === 'CLOSED' && (
-  <div className="flex gap-2">
-    <button
-  onClick={() => downloadFile(`/api/admin/export/session/${session.id}/xlsx`, `prisustvo_${session.id}.xlsx`)}
-  className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm"
->
-  xlsx
-</button>
-<button
-  onClick={() => downloadFile(`/api/admin/export/session/${session.id}/pdf`, `prisustvo_${session.id}.pdf`)}
-  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
->
-  PDF
-</button>
-  </div>
-)}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => downloadFile(
+                      `/api/admin/export/session/${session.id}/xlsx`, 
+                      `prisustvo_${subject?.code}_G${subject?.groupName}_${formatDate(session.date)}.xlsx`
+                    )}
+                    className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm"
+                  >
+                    xlsx
+                  </button>
+                  <button
+                    onClick={() => downloadFile(
+                      `/api/admin/export/session/${session.id}/pdf`, 
+                      `prisustvo_${subject?.code}_G${subject?.groupName}_${formatDate(session.date)}.pdf`
+                    )}
+                    className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm"
+                  >
+                    PDF
+                  </button>
+                  <button
+                    onClick={() => deleteSession(session.id)}
+                    className="border border-red-300 text-red-600 px-3 py-1 rounded hover:bg-red-50 text-sm"
+                  >
+                    Obriši
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ))}

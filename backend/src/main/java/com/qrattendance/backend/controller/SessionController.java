@@ -48,6 +48,25 @@ public class SessionController {
         return ResponseEntity.ok(sessionService.createSession(session));
     }
 
+    @DeleteMapping("/{sessionId}")
+public ResponseEntity<?> deleteSession(
+        @PathVariable String sessionId,
+        @AuthenticationPrincipal Jwt jwt) {
+
+    Session session = sessionService.findById(sessionId)
+            .orElseThrow(() -> new RuntimeException("Sesija nije pronađena"));
+
+    // Samo CREATED sesije se mogu brisati
+    if (session.getStatus() == Session.SessionStatus.ACTIVE) {
+        return ResponseEntity.badRequest()
+                .body(Map.of("error", "Ne možete obrisati aktivnu sesiju. Prvo je zatvorite."));
+    }
+
+    qrSchedulerService.unregisterSession(sessionId);
+    sessionService.deleteSession(sessionId);
+    return ResponseEntity.ok(Map.of("message", "Sesija uspješno obrisana"));
+}
+
     @PostMapping("/{sessionId}/activate")
     public ResponseEntity<Map<String, Object>> activateSession(
             @PathVariable String sessionId,

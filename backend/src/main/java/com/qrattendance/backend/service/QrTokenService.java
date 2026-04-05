@@ -4,6 +4,7 @@ import com.qrattendance.backend.model.QrToken;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -14,10 +15,15 @@ import java.util.concurrent.TimeUnit;
 public class QrTokenService {
 
     private final RedisTemplate<String, Object> redisTemplate;
-
-    private static final long TOKEN_VALIDITY_SECONDS = 300;
     private static final String TOKEN_PREFIX = "qr:token:";
     private static final String SESSION_PREFIX = "qr:session:";
+
+    @Value("${app.qr-refresh-interval:30000}")
+    private long qrRefreshIntervalMs;
+
+    private long getTokenValiditySeconds() {
+      return qrRefreshIntervalMs / 1000;
+    }
 
     public QrToken generateToken(String sessionId) {
         // Invalidate stari token za ovu sesiju
@@ -30,7 +36,7 @@ public class QrTokenService {
             token,
             sessionId,
             now,
-            now.plusSeconds(TOKEN_VALIDITY_SECONDS),
+            now.plusSeconds(getTokenValiditySeconds()),
             false
         );
 
@@ -38,7 +44,7 @@ public class QrTokenService {
         redisTemplate.opsForValue().set(
             TOKEN_PREFIX + token,
             qrToken,
-            TOKEN_VALIDITY_SECONDS,
+            getTokenValiditySeconds(),
             TimeUnit.SECONDS
         );
 
@@ -46,7 +52,7 @@ public class QrTokenService {
         redisTemplate.opsForValue().set(
             SESSION_PREFIX + sessionId,
             token,
-            TOKEN_VALIDITY_SECONDS,
+            getTokenValiditySeconds(),
             TimeUnit.SECONDS
         );
 

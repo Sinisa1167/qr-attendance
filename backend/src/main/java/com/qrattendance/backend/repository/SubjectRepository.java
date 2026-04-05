@@ -10,4 +10,6 @@ import java.util.List;
 @Repository
 public interface SubjectRepository extends JpaRepository<Subject, String> {
     List<Subject> findByCreatedBy(User createdBy);
+    boolean existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
+    String code, String teachingType, String groupName, String academicYear);
 }

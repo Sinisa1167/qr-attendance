@@ -9,15 +9,17 @@ function LiveSession() {
   const [token, setToken] = useState(null)
   const [attendance, setAttendance] = useState([])
   const [session, setSession] = useState(null)
+  const [refreshInterval, setRefreshInterval] = useState(30)
   const [timeLeft, setTimeLeft] = useState(30)
+  const [fullscreen, setFullscreen] = useState(false)
   const intervalRef = useRef(null)
   const countdownRef = useRef(null)
 
   useEffect(() => {
+    fetchConfig()
     fetchToken()
     fetchAttendance()
 
-    // Osvježavaj prisustvo svakih 5 sekundi
     intervalRef.current = setInterval(() => {
       fetchAttendance()
     }, 5000)
@@ -34,11 +36,24 @@ function LiveSession() {
     }
   }, [token])
 
+  useEffect(() => {
+    setTimeLeft(refreshInterval)
+  }, [refreshInterval])
+
+  const fetchConfig = async () => {
+    try {
+      const res = await api.get('/api/public/config')
+      setRefreshInterval(res.data.qrRefreshInterval / 1000)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   const fetchToken = async () => {
     try {
       const res = await api.get(`/api/admin/sessions/${sessionId}/token`)
       setToken(res.data.token)
-      setTimeLeft(30)
+      setTimeLeft(refreshInterval)
     } catch (err) {
       console.error(err)
     }
@@ -55,12 +70,12 @@ function LiveSession() {
 
   const startCountdown = () => {
     clearInterval(countdownRef.current)
-    setTimeLeft(30)
+    setTimeLeft(refreshInterval)
     countdownRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           fetchToken()
-          return 30
+          return refreshInterval
         }
         return prev - 1
       })
@@ -101,10 +116,21 @@ function LiveSession() {
 
         {/* QR Kod */}
         <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center">
-          <h3 className="text-lg font-semibold mb-4">QR Kod</h3>
+          <div className="flex justify-between items-center w-full mb-4">
+            <h3 className="text-lg font-semibold">QR Kod</h3>
+            {token && (
+              <button
+                onClick={() => setFullscreen(true)}
+                className="text-blue-600 hover:text-blue-800 text-sm border border-blue-300 px-2 py-1 rounded"
+              >
+                ⛶ Fullscreen
+              </button>
+            )}
+          </div>
           {token ? (
             <>
-              <div className="p-4 bg-white border-2 border-gray-200 rounded-lg">
+              <div className="p-4 bg-white border-2 border-gray-200 rounded-lg cursor-pointer"
+                onClick={() => setFullscreen(true)}>
                 <QRCodeSVG value={token} size={200} />
               </div>
               <div className="mt-4 text-center">
@@ -152,6 +178,26 @@ function LiveSession() {
           )}
         </div>
       </div>
+
+      {/* Fullscreen QR overlay */}
+      {fullscreen && token && (
+        <div
+          className="fixed inset-0 bg-white flex flex-col items-center justify-center z-50 cursor-pointer"
+          onClick={() => setFullscreen(false)}
+        >
+          <p className="text-gray-400 text-sm mb-8">Kliknite bilo gdje za izlaz</p>
+          <div className="p-6 bg-white border-4 border-gray-200 rounded-2xl shadow-lg">
+            <QRCodeSVG value={token} size={350} />
+          </div>
+          <div className="mt-8 text-center">
+            <p className="text-gray-500 text-lg">Osvježava se za</p>
+            <p className={`text-7xl font-bold mt-2 ${timeLeft <= 10 ? 'text-red-500' : 'text-blue-600'}`}>
+              {timeLeft}s
+            </p>
+          </div>
+          <p className="text-gray-300 text-xs mt-8">Prisustvo: {attendance.length} studenata</p>
+        </div>
+      )}
     </div>
   )
 }
