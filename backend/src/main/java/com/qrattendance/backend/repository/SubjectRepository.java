@@ -11,6 +11,8 @@ public interface SubjectRepository extends JpaRepository<Subject, String> {
     
     List<Subject> findByCreatedBy(User user);
 
+    List<Subject> findByCode(String code);
+
     boolean existsByIdAndStudents_Id(String subjectId, String studentId);
 
     boolean existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(

@@ -4,6 +4,7 @@ import Dashboard from './pages/zaposleni/Dashboard'
 import Sessions from './pages/zaposleni/Sessions'
 import LiveSession from './pages/zaposleni/LiveSession'
 import ScanQR from './pages/student/ScanQR'
+import Analytics from './pages/zaposleni/Analytics'
 
 function AppLayout() {
   const roles = keycloak.tokenParsed?.realm_access?.roles || []
@@ -33,6 +34,7 @@ function AppLayout() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/subject/:subjectId" element={<Sessions />} />
+            <Route path="/subject/:subjectId/analytics" element={<Analytics />} />
             <Route path="/session/:sessionId/live" element={<LiveSession />} />
           </Routes>
         )}

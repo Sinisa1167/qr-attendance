@@ -5,8 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import java.util.ArrayList; // Dodano
 import java.util.List;
 
 @Entity
@@ -53,7 +53,7 @@ public class Subject {
 
     @JsonIgnore
     @OneToMany(mappedBy = "subject", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Session> sessions;
+    private List<Session> sessions = new ArrayList<>(); // Inicijalizacija
 
     @ManyToMany
     @JoinTable(
@@ -61,5 +61,5 @@ public class Subject {
         joinColumns = @JoinColumn(name = "subject_id"),
         inverseJoinColumns = @JoinColumn(name = "student_id")
     )
-    private List<User> students;
+    private List<User> students = new ArrayList<>(); // Inicijalizacija
 }
