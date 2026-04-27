@@ -14,6 +14,7 @@ public class SubjectAnalyticsDTO {
     private List<SessionStat> sessionStats;
     private List<StudentStat> studentStats;
     private Map<String, Double> groupStats;
+    private List<SessionInfo> sessionHeaders;
 
     public double getAveragePercentage() {
         if (studentStats == null || studentStats.isEmpty()) return 0.0;
@@ -32,11 +33,20 @@ public class SubjectAnalyticsDTO {
 
     @Data
     @Builder
+    public static class SessionInfo {
+        private String sessionId;
+        private String date;
+        private String activityType;
+    }
+
+    @Data
+    @Builder
     public static class StudentStat {
         private String fullName;
         private String index;
         private long attendedCount;
         private double percentage;
         private boolean belowThreshold;
+        private Map<String, Boolean> sessionAttendance;
     }
 }

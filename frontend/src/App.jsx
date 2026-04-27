@@ -16,20 +16,22 @@ function AppLayout() {
   return (
     <div className="h-screen flex flex-col bg-gray-100">
       <nav className="bg-blue-600 text-white px-4 py-3 flex justify-between items-center shrink-0">
-        <h1 className="text-xl font-bold">QR Attendance</h1>
-        <div className="flex items-center gap-4">
-          <span className="text-sm">{keycloak.tokenParsed?.email}</span>
-          <button
-            onClick={() => keycloak.logout()}
-            className="bg-white text-blue-600 px-3 py-1 rounded font-medium hover:bg-gray-100"
-          >
-            Odjava
-          </button>
-        </div>
-      </nav>
+  <h1 className="text-xl font-bold whitespace-nowrap">QR Attendance</h1>
+  <div className="flex items-center gap-2 min-w-0">
+    <span className="text-sm hidden sm:block">
+  {keycloak.tokenParsed?.email}
+</span>
+    <button
+      onClick={() => keycloak.logout()}
+      className="bg-white text-blue-600 px-3 py-1 rounded font-medium hover:bg-gray-100 whitespace-nowrap text-sm shrink-0"
+    >
+      Odjava
+    </button>
+  </div>
+</nav>
 
       {/* Na /live stranici nema paddinga i overflow je hidden — LiveSession sam upravlja layoutom */}
-      <main className={`flex-1 min-h-0 ${isLive ? 'overflow-hidden' : 'overflow-auto p-6'}`}>
+      <main className={`flex-1 min-h-0 ${isLive ? 'overflow-hidden' : 'overflow-auto p-2 sm:p-6'}`}>
         {isZaposleni && (
           <Routes>
             <Route path="/" element={<Dashboard />} />

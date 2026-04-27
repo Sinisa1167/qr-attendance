@@ -93,7 +93,7 @@ function ScanQR() {
   }
 
   return (
-    <div className="max-w-md mx-auto p-4">
+    <div className="w-full px-2 sm:px-4 sm:max-w-md sm:mx-auto">
       <div className="text-center mb-8">
         <h2 className="text-3xl font-black text-gray-900">Scan QR</h2>
         <p className="text-gray-500 mt-2 font-medium">Evidencija prisustva na nastavi</p>
@@ -101,7 +101,7 @@ function ScanQR() {
 
       {/* Skener panel */}
       {!result && !loading && (
-        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 w-full">
           <div className="p-6">
              <div id="qr-reader" className="w-full overflow-hidden rounded-2xl" />
           </div>
