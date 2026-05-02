@@ -5,9 +5,11 @@ import com.qrattendance.backend.model.Session;
 import com.qrattendance.backend.model.User;
 import com.qrattendance.backend.repository.AttendanceRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -15,6 +17,7 @@ import java.util.Optional;
 public class AttendanceService {
 
     private final AttendanceRepository attendanceRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public List<Attendance> getAttendanceForSession(Session session) {
         return attendanceRepository.findBySession(session);
@@ -44,7 +47,17 @@ public class AttendanceService {
         attendance.setUserAgent(userAgent);
         attendance.setTokenUsed(tokenUsed);
 
-        return attendanceRepository.save(attendance);
+        Attendance saved = attendanceRepository.save(attendance);
+
+        messagingTemplate.convertAndSend(
+            "/topic/session/" + session.getId(),
+            Map.of(
+                "type", "NEW_ATTENDANCE",
+                "sessionId", session.getId()
+            )
+        );
+
+        return saved;
     }
 
     public void deleteAttendance(String id) {

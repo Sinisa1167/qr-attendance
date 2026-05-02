@@ -2,13 +2,8 @@ package com.qrattendance.backend.controller;
 
 import com.qrattendance.backend.model.Session;
 import com.qrattendance.backend.model.Subject;
-import com.qrattendance.backend.model.User;
 import com.qrattendance.backend.model.QrToken;
-import com.qrattendance.backend.service.SessionService;
-import com.qrattendance.backend.service.SubjectService;
-import com.qrattendance.backend.service.UserService;
-import com.qrattendance.backend.service.QrTokenService;
-import com.qrattendance.backend.service.QrSchedulerService;
+import com.qrattendance.backend.service.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,7 +20,6 @@ public class SessionController {
 
     private final SessionService sessionService;
     private final SubjectService subjectService;
-    private final UserService userService;
     private final QrTokenService qrTokenService;
     private final QrSchedulerService qrSchedulerService;
 
@@ -44,28 +38,35 @@ public class SessionController {
     public ResponseEntity<Session> createSession(
             @RequestBody Session session,
             @AuthenticationPrincipal Jwt jwt) {
+        
+        if (session.getSubject() == null || session.getSubject().getId() == null) {
+             return ResponseEntity.badRequest().build();
+        }
+        
+        Subject subject = subjectService.findById(session.getSubject().getId())
+                .orElseThrow(() -> new RuntimeException("Predmet nije pronađen"));
+        session.setSubject(subject);
 
         return ResponseEntity.ok(sessionService.createSession(session));
     }
 
     @DeleteMapping("/{sessionId}")
-public ResponseEntity<?> deleteSession(
-        @PathVariable String sessionId,
-        @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<?> deleteSession(
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal Jwt jwt) {
 
-    Session session = sessionService.findById(sessionId)
-            .orElseThrow(() -> new RuntimeException("Sesija nije pronađena"));
+        Session session = sessionService.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Sesija nije pronađena"));
 
-    // Samo CREATED sesije se mogu brisati
-    if (session.getStatus() == Session.SessionStatus.ACTIVE) {
-        return ResponseEntity.badRequest()
-                .body(Map.of("error", "Ne možete obrisati aktivnu sesiju. Prvo je zatvorite."));
+        if (session.getStatus() == Session.SessionStatus.ACTIVE) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Ne možete obrisati aktivnu sesiju. Prvo je zatvorite."));
+        }
+
+        qrSchedulerService.unregisterSession(sessionId);
+        sessionService.deleteSession(sessionId);
+        return ResponseEntity.ok(Map.of("message", "Sesija uspješno obrisana"));
     }
-
-    qrSchedulerService.unregisterSession(sessionId);
-    sessionService.deleteSession(sessionId);
-    return ResponseEntity.ok(Map.of("message", "Sesija uspješno obrisana"));
-}
 
     @PostMapping("/{sessionId}/activate")
     public ResponseEntity<Map<String, Object>> activateSession(
@@ -77,8 +78,6 @@ public ResponseEntity<?> deleteSession(
 
         Session activated = sessionService.activateSession(session);
         QrToken token = qrTokenService.generateToken(sessionId);
-
-        // Registruj sesiju za automatsko osvježavanje tokena
         qrSchedulerService.registerSession(sessionId);
 
         return ResponseEntity.ok(Map.of(
@@ -96,9 +95,7 @@ public ResponseEntity<?> deleteSession(
         Session session = sessionService.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Sesija nije pronađena"));
 
-        // Unregistruj sesiju i invaliduj token
         qrSchedulerService.unregisterSession(sessionId);
-
         return ResponseEntity.ok(sessionService.closeSession(session));
     }
 
@@ -120,7 +117,6 @@ public ResponseEntity<?> deleteSession(
             currentToken = token.getToken();
         }
 
-        // Dodajemo "expiresIn" i mijenjamo ključ u "token" radi frontenda
         return ResponseEntity.ok(Map.of(
                 "token", currentToken,
                 "sessionId", sessionId,

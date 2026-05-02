@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../../api/axiosInstance'
+import { Trash2, Trash2Icon } from 'lucide-react'
 
 function Sessions() {
   const { subjectId } = useParams()
@@ -10,7 +11,6 @@ function Sessions() {
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
   
-  // Postavljamo današnji datum kao default
   const [newSession, setNewSession] = useState({
     activityType: 'PREDAVANJE',
     date: new Date().toISOString().split('T')[0],
@@ -22,54 +22,80 @@ function Sessions() {
     fetchData()
   }, [subjectId])
 
-  const fetchData = async () => {
-    try {
-      const [subjectsRes, sessionsRes] = await Promise.all([
-        api.get('/api/admin/subjects'),
-        api.get(`/api/admin/sessions/subject/${subjectId}`)
-      ])
-      
-      // FIX: Sigurnije poređenje ID-eva (string vs number)
-      const found = subjectsRes.data.find(s => s.id.toString() === subjectId.toString())
-      
-      setSubject(found)
-      setSessions(sessionsRes.data)
-    } catch (err) {
-      console.error("Greška pri učitavanju:", err)
-    } finally {
-      setLoading(false)
-    }
+  const fetchSessions = async () => {
+  try {
+    const res = await api.get(`/api/admin/sessions/subject/${subjectId}`)
+    console.log('Sesije sa servera:', res.data)
+    const sorted = res.data.sort((a, b) => {
+      const order = { ACTIVE: 0, CREATED: 1, CLOSED: 2 }
+      return order[a.status] - order[b.status]
+    })
+    console.log('Sortirane sesije:', sorted)
+    setSessions(sorted)
+  } catch (err) {
+    console.error("Greška pri učitavanju sesija:", err)
   }
+}
+
+const fetchData = async () => {
+  try {
+    const [subjectsRes, sessionsRes] = await Promise.all([
+      api.get('/api/admin/subjects'),
+      api.get(`/api/admin/sessions/subject/${subjectId}`)
+    ])
+    const found = subjectsRes.data.find(s => s.id.toString() === subjectId.toString())
+    setSubject(found)
+    const sorted = sessionsRes.data.sort((a, b) => {
+      const order = { ACTIVE: 0, CREATED: 1, CLOSED: 2 }
+      return order[a.status] - order[b.status]
+    })
+    setSessions(sorted)
+  } catch (err) {
+    console.error("Greška pri učitavanju:", err)
+  } finally {
+    setLoading(false)
+  }
+}
 
   const createSession = async () => {
-    if (!newSession.date || !newSession.startTime || !newSession.endTime) {
-      alert("Molimo popunite sva polja");
-      return;
-    }
-    try {
-      const sessionData = {
-        subject: { id: subjectId },
-        ...newSession,
-        groupNumber: subject?.groupName,
-        status: 'CREATED' // Eksplicitno postavljamo status
-      }
-      await api.post('/api/admin/sessions', sessionData)
-      setShowCreateForm(false)
-      fetchData()
-    } catch (err) {
-      alert("Greška pri kreiranju sesije")
-    }
+  if (!newSession.date || !newSession.startTime || !newSession.endTime) {
+    alert("Molimo popunite sva polja")
+    return
   }
+  try {
+    const sessionData = {
+      subject: { id: subjectId },
+      ...newSession,
+      groupNumber: subject?.groupName,
+      status: 'CREATED'
+    }
+    const res = await api.post('/api/admin/sessions', sessionData)
+    setShowCreateForm(false)
+    await fetchSessions()
+  } catch (err) {
+    alert("Greška pri kreiranju sesije")
+  }
+}
 
-  const deleteSession = async (sessionId) => {
-    if (!window.confirm('Da li ste sigurni da želite obrisati ovu sesiju? Svi podaci o prisustvu će biti izgubljeni.')) return
-    try {
-      await api.delete(`/api/admin/sessions/${sessionId}`)
-      fetchData()
-    } catch (err) {
-      alert(err.response?.data?.error || 'Greška pri brisanju sesije')
-    }
+const deleteSession = async (sessionId) => {
+  if (!window.confirm('Da li ste sigurni da želite obrisati ovu sesiju?')) return
+  try {
+    await api.delete(`/api/admin/sessions/${sessionId}`)
+    await fetchSessions()
+  } catch (err) {
+    alert(err.response?.data?.error || 'Greška pri brisanju sesije')
   }
+}
+
+const closeSession = async (sessionId) => {
+  if (!window.confirm('Zatvori sesiju? Nakon zatvaranja prijave više nisu moguće.')) return
+  try {
+    await api.post(`/api/admin/sessions/${sessionId}/close`)
+    await fetchSessions()
+  } catch (err) {
+    console.error(err)
+  }
+}
 
   const activateSession = async (sessionId) => {
     try {
@@ -80,15 +106,6 @@ function Sessions() {
     }
   }
 
-  const closeSession = async (sessionId) => {
-    if (!window.confirm('Zatvori sesiju? Nakon zatvaranja prijave više nisu moguće.')) return
-    try {
-      await api.post(`/api/admin/sessions/${sessionId}/close`)
-      fetchData()
-    } catch (err) {
-      console.error(err)
-    }
-  }
 
   const sessionFilename = (session, ext) => {
     const tip = (session.activityType || 'Sesija')
@@ -149,24 +166,37 @@ function Sessions() {
             <span className="text-gray-500 text-sm font-medium">{subject?.studyProgram} (Semestar {subject?.semester})</span>
           </div>
           <div className="flex gap-2 mt-4">
-            <span className="bg-purple-50 text-purple-700 text-[10px] font-bold px-2 py-1 rounded border border-purple-100 uppercase uppercase tracking-wider">{subject?.teachingType}</span>
-            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-1 rounded border border-emerald-100 uppercase uppercase tracking-wider">Grupa {subject?.groupName}</span>
+            <span className="bg-purple-50 text-purple-700 text-[10px] font-bold px-2 py-1 rounded border border-purple-100 uppercase tracking-wider">
+              {subject?.teachingType}
+            </span>
+            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-1 rounded border border-emerald-100 uppercase tracking-wider">
+              Grupa {subject?.groupName}
+            </span>
           </div>
         </div>
 
         <div className="flex flex-col gap-2 w-full md:w-auto">
+          {/* Analitika predmeta prebačena ovdje */}
           <button
-            onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/xlsx`, `Izvjestaj_${subject?.code}.xlsx`)}
-            className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 transition-all text-sm"
+            onClick={() => navigate(`/subject/${subjectId}/analytics`)}
+            className="flex items-center justify-center gap-2 bg-violet-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-violet-700 transition-all text-sm shadow-lg shadow-violet-100"
           >
-            📊 Export XLSX
+            📈 Analitika predmeta
           </button>
-          <button
-            onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/pdf`, `Izvjestaj_${subject?.code}.pdf`)}
-            className="flex items-center justify-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-red-600 transition-all text-sm"
-          >
-            📄 Export PDF
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/xlsx`, `Izvjestaj_${subject?.code}.xlsx`)}
+              className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 transition-all text-xs"
+            >
+              📊 XLSX
+            </button>
+            <button
+              onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/pdf`, `Izvjestaj_${subject?.code}.pdf`)}
+              className="flex items-center justify-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-red-600 transition-all text-xs"
+            >
+              📄 PDF
+            </button>
+          </div>
         </div>
       </div>
 
@@ -244,10 +274,13 @@ function Sessions() {
           </div>
         ) : (
           sessions.map((session) => (
-            <div key={session.id} className="group bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row justify-between items-center gap-4">
+            <div 
+              key={session.id} 
+              className="group bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row justify-between items-center gap-4"
+            >
               <div className="flex items-center gap-4 w-full md:w-auto">
                 <div className={`p-3 rounded-xl ${session.status === 'ACTIVE' ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-400'}`}>
-                   📅
+                  📅
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -262,37 +295,58 @@ function Sessions() {
                 </div>
               </div>
 
-              <div className="flex gap-2 w-full md:w-auto justify-end">
+              <div className="flex gap-2 w-full md:w-auto justify-end flex-wrap">
                 {session.status === 'CREATED' && (
                   <>
-                    <button onClick={() => activateSession(session.id)} className="flex-1 md:flex-none bg-green-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-green-700 transition-all text-xs">
+                    <button 
+                      onClick={() => activateSession(session.id)} 
+                      className="flex-1 md:flex-none bg-green-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-green-700 transition-all text-xs"
+                    >
                       Aktiviraj
                     </button>
-                    <button onClick={() => deleteSession(session.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
-                      🗑️
+                    <button 
+                      onClick={() => deleteSession(session.id)} 
+                      className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+                      <Trash2 size={16} />
                     </button>
                   </>
                 )}
+
                 {session.status === 'ACTIVE' && (
                   <>
-                    <button onClick={() => navigate(`/session/${session.id}/live`)} className="flex-1 md:flex-none bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 transition-all text-xs">
+                    <button 
+                      onClick={() => navigate(`/session/${session.id}/live`)} 
+                      className="flex-1 md:flex-none bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 transition-all text-xs"
+                    >
                       Live Monitor
                     </button>
-                    <button onClick={() => closeSession(session.id)} className="flex-1 md:flex-none bg-red-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-red-600 transition-all text-xs">
+                    <button 
+                      onClick={() => closeSession(session.id)} 
+                      className="flex-1 md:flex-none bg-red-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-red-600 transition-all text-xs"
+                    >
                       Zatvori
                     </button>
                   </>
                 )}
+
                 {session.status === 'CLOSED' && (
                   <div className="flex gap-2 items-center">
-                    <button onClick={() => downloadFile(`/api/admin/export/session/${session.id}/xlsx`, sessionFilename(session, 'xlsx'))} className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-lg font-bold hover:bg-emerald-100 transition-all text-[10px] uppercase border border-emerald-100">
+                    <button 
+                      onClick={() => downloadFile(`/api/admin/export/session/${session.id}/xlsx`, sessionFilename(session, 'xlsx'))} 
+                      className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-lg font-bold hover:bg-emerald-100 transition-all text-[10px] uppercase border border-emerald-100"
+                    >
                       xlsx
                     </button>
-                    <button onClick={() => downloadFile(`/api/admin/export/session/${session.id}/pdf`, sessionFilename(session, 'pdf'))} className="bg-red-50 text-red-700 px-3 py-2 rounded-lg font-bold hover:bg-red-100 transition-all text-[10px] uppercase border border-red-100">
+                    <button 
+                      onClick={() => downloadFile(`/api/admin/export/session/${session.id}/pdf`, sessionFilename(session, 'pdf'))} 
+                      className="bg-red-50 text-red-700 px-3 py-2 rounded-lg font-bold hover:bg-red-100 transition-all text-[10px] uppercase border border-red-100"
+                    >
                       pdf
                     </button>
-                    <button onClick={() => deleteSession(session.id)} className="ml-2 p-2 text-gray-300 hover:text-red-500 transition-colors">
-                      🗑️
+                    <button 
+                      onClick={() => deleteSession(session.id)} 
+                      className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 )}

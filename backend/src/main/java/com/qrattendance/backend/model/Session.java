@@ -63,10 +63,15 @@ public class Session {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        status = SessionStatus.CREATED;
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        if (status == null) {
+            status = SessionStatus.CREATED;
+        }
     }
 
+    @JsonIgnore
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Attendance> attendanceList;
 

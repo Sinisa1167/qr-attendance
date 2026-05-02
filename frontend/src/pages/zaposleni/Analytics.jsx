@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { AlertTriangle, Users, FileBarChart, Download, TrendingUp, ChevronDown, BarChart2, Grid } from 'lucide-react'
+import { AlertTriangle, Users, FileBarChart, Download, TrendingUp, ChevronDown, BarChart2, Grid, List } from 'lucide-react'
 import api from '../../api/axiosInstance'
 
 const FILTER_ALL = 'all'
@@ -15,6 +15,7 @@ function Analytics() {
   const [sortDirection, setSortDirection] = useState('desc')
   const [showCharts, setShowCharts] = useState(false)
   const [showMatrix, setShowMatrix] = useState(false)
+  const [showTable, setShowTable] = useState(true) // Dodato: Kontrola tabele
   const [filter, setFilter] = useState(FILTER_ALL)
 
   useEffect(() => {
@@ -57,8 +58,8 @@ function Analytics() {
 
   const toggleSort = () => setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc')
 
-  if (loading) return <div className="p-10 text-center font-bold">Učitavanje analitike...</div>
-  if (!data) return <div className="p-10 text-center text-red-600">Greška pri učitavanju podataka</div>
+  if (loading) return <div className="p-10 text-center font-bold text-gray-600">Učitavanje analitike...</div>
+  if (!data) return <div className="p-10 text-center text-red-600 font-bold">Greška pri učitavanju podataka</div>
 
   const groupChartData = data.groupStats
     ? Object.entries(data.groupStats).map(([name, value]) => ({ name, procenat: Math.round(value || 0) }))
@@ -79,6 +80,7 @@ function Analytics() {
 
   return (
     <div className="max-w-7xl mx-auto p-4 lg:p-8 space-y-8 pb-12">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900">{data.subjectName}</h1>
@@ -94,6 +96,7 @@ function Analytics() {
         </div>
       </div>
 
+      {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl"><Users size={28} /></div>
@@ -118,10 +121,11 @@ function Analytics() {
         </div>
       </div>
 
+      {/* Control Menu */}
       <div className="flex justify-center gap-3 flex-wrap">
         <button
           onClick={() => setShowCharts(!showCharts)}
-          className="flex items-center gap-3 bg-white border border-gray-200 px-8 py-3 rounded-2xl font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm"
+          className="flex items-center gap-3 bg-white border border-gray-200 px-6 py-3 rounded-2xl font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm"
         >
           <BarChart2 size={20} className="text-blue-600" />
           {showCharts ? 'Sakrij grafove' : 'Prikaži grafove'}
@@ -129,14 +133,23 @@ function Analytics() {
         </button>
         <button
           onClick={() => setShowMatrix(!showMatrix)}
-          className="flex items-center gap-3 bg-white border border-gray-200 px-8 py-3 rounded-2xl font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm"
+          className="flex items-center gap-3 bg-white border border-gray-200 px-6 py-3 rounded-2xl font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm"
         >
           <Grid size={20} className="text-purple-600" />
           {showMatrix ? 'Sakrij matricu' : 'Prisustvo po sesijama'}
           <ChevronDown size={20} className={`transition-transform duration-300 ${showMatrix ? 'rotate-180' : ''}`} />
         </button>
+        <button
+          onClick={() => setShowTable(!showTable)}
+          className="flex items-center gap-3 bg-white border border-gray-200 px-6 py-3 rounded-2xl font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm"
+        >
+          <List size={20} className="text-emerald-600" />
+          {showTable ? 'Sakrij tabelu' : 'Kumulativna evidencija'}
+          <ChevronDown size={20} className={`transition-transform duration-300 ${showTable ? 'rotate-180' : ''}`} />
+        </button>
       </div>
 
+      {/* Charts Section */}
       {showCharts && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 overflow-x-auto animate-in fade-in slide-in-from-top-4 duration-500">
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 min-w-[450px]">
@@ -170,6 +183,7 @@ function Analytics() {
         </div>
       )}
 
+      {/* Session Matrix Section */}
       {showMatrix && sessionHeaders.length > 0 && (
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
           <div className="p-6 border-b border-gray-50">
@@ -234,70 +248,73 @@ function Analytics() {
         </div>
       )}
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h3 className="text-lg font-black text-gray-800">Kumulativna evidencija</h3>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
-              <button
-                onClick={() => setFilter(FILTER_ALL)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === FILTER_ALL ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                Svi ({data.studentStats.length})
-              </button>
-              <button
-                onClick={() => setFilter(FILTER_BELOW)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === FILTER_BELOW ? 'bg-red-500 shadow text-white' : 'text-gray-500 hover:text-red-500'}`}
-              >
-                Ispod {threshold}% ({belowCount})
-              </button>
-              <button
-                onClick={() => setFilter(FILTER_ABOVE)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === FILTER_ABOVE ? 'bg-emerald-500 shadow text-white' : 'text-gray-500 hover:text-emerald-500'}`}
-              >
-                Iznad ({aboveCount})
+      {/* Cumulative Table Section */}
+      {showTable && (
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="p-6 border-b border-gray-50 border-t-2 border-t-emerald-500/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h3 className="text-lg font-black text-gray-800">Kumulativna evidencija</h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+                <button
+                  onClick={() => setFilter(FILTER_ALL)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === FILTER_ALL ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Svi ({data.studentStats.length})
+                </button>
+                <button
+                  onClick={() => setFilter(FILTER_BELOW)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === FILTER_BELOW ? 'bg-red-500 shadow text-white' : 'text-gray-500 hover:text-red-500'}`}
+                >
+                  Ispod {threshold}% ({belowCount})
+                </button>
+                <button
+                  onClick={() => setFilter(FILTER_ABOVE)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === FILTER_ABOVE ? 'bg-emerald-500 shadow text-white' : 'text-gray-500 hover:text-emerald-500'}`}
+                >
+                  Iznad ({aboveCount})
+                </button>
+              </div>
+              <button onClick={toggleSort} className="bg-gray-50 px-4 py-2 rounded-xl text-sm font-bold text-gray-600 border border-gray-100 hover:bg-gray-100 transition-all">
+                Sortiraj ↕
               </button>
             </div>
-            <button onClick={toggleSort} className="bg-gray-50 px-4 py-2 rounded-xl text-sm font-bold text-gray-600 border border-gray-100 hover:bg-gray-100 transition-all">
-              Sortiraj ↕
-            </button>
           </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 text-[10px] uppercase font-black text-gray-500">
-              <tr>
-                <th className="px-6 py-4">Indeks</th>
-                <th className="px-6 py-4">Student</th>
-                <th className="px-6 py-4 text-center">Dolazaka</th>
-                <th className="px-6 py-4 text-right">Procenat</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {sortedAndFilteredStats.length === 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 text-[10px] uppercase font-black text-gray-500">
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-gray-400 font-medium italic">
-                    Nema studenata za odabrani filter.
-                  </td>
+                  <th className="px-6 py-4">Indeks</th>
+                  <th className="px-6 py-4">Student</th>
+                  <th className="px-6 py-4 text-center">Dolazaka</th>
+                  <th className="px-6 py-4 text-right">Procenat</th>
                 </tr>
-              ) : (
-                sortedAndFilteredStats.map((s, idx) => (
-                  <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
-                    <td className="px-6 py-4 font-mono font-bold text-sm">{s.index}</td>
-                    <td className="px-6 py-4 font-semibold">{s.lastName} {s.firstName}</td>
-                    <td className="px-6 py-4 text-center font-bold text-emerald-600">{s.attended}</td>
-                    <td className="px-6 py-4 text-right">
-                      <span className={`inline-block px-4 py-1.5 rounded-2xl text-sm font-black ${s.isCritical ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                        {s.percentage}%
-                      </span>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {sortedAndFilteredStats.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-gray-400 font-medium italic">
+                      Nema studenata za odabrani filter.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  sortedAndFilteredStats.map((s, idx) => (
+                    <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                      <td className="px-6 py-4 font-mono font-bold text-sm">{s.index}</td>
+                      <td className="px-6 py-4 font-semibold">{s.lastName} {s.firstName}</td>
+                      <td className="px-6 py-4 text-center font-bold text-emerald-600">{s.attended}</td>
+                      <td className="px-6 py-4 text-right">
+                        <span className={`inline-block px-4 py-1.5 rounded-2xl text-sm font-black ${s.isCritical ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {s.percentage}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

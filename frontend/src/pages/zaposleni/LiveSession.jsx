@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
+import { Client } from '@stomp/stompjs'
+import SockJS from 'sockjs-client/dist/sockjs.min.js'
 import api from '../../api/axiosInstance'
 
 function LiveSession() {
@@ -12,16 +14,19 @@ function LiveSession() {
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [qrFullscreen, setQrFullscreen] = useState(false)
 
-  const intervalRef = useRef(null)
   const countdownRef = useRef(null)
+  const stompClientRef = useRef(null)
 
   useEffect(() => {
     fetchToken()
     fetchAttendance()
-    intervalRef.current = setInterval(fetchAttendance, 5000)
+    connectWebSocket()
+
     return () => {
-      clearInterval(intervalRef.current)
       clearInterval(countdownRef.current)
+      if (stompClientRef.current) {
+        stompClientRef.current.deactivate()
+      }
     }
   }, [sessionId])
 
@@ -30,6 +35,26 @@ function LiveSession() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  const connectWebSocket = () => {
+    const client = new Client({
+      webSocketFactory: () => new SockJS('http://localhost:8081/ws'),
+      reconnectDelay: 5000,
+      onConnect: () => {
+        client.subscribe(`/topic/session/${sessionId}`, (message) => {
+          const data = JSON.parse(message.body)
+          if (data.type === 'NEW_ATTENDANCE') {
+            fetchAttendance()
+          }
+        })
+      },
+      onStompError: (frame) => {
+        console.error('STOMP error:', frame)
+      }
+    })
+    client.activate()
+    stompClientRef.current = client
+  }
 
   const fetchToken = async () => {
     try {
@@ -58,9 +83,9 @@ function LiveSession() {
     let t = initialTime
     countdownRef.current = setInterval(() => {
       t -= 1
-      if (t <= 0) { 
+      if (t <= 0) {
         clearInterval(countdownRef.current)
-        fetchToken() 
+        fetchToken()
       } else {
         setTimeLeft(t)
       }
@@ -89,7 +114,6 @@ function LiveSession() {
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col p-4 lg:p-8 gap-6 box-border">
 
-      {/* HEADER SEKCIJA */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center shrink-0 gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Live Monitoring</h2>
@@ -105,31 +129,30 @@ function LiveSession() {
         </button>
       </div>
 
-      {/* GLAVNI KONTEJNER (Grid) */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 min-h-0">
 
-        {/* ---- LIJEVA KARTICA: QR ---- */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col min-h-0 overflow-hidden transition-all hover:shadow-md">
+        {/* QR kartica — klik bilo gdje otvara fullscreen */}
+        <div
+          onClick={() => setQrFullscreen(true)}
+          className="bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col min-h-0 overflow-hidden transition-all hover:shadow-md cursor-pointer group"
+        >
           <div className="flex items-center justify-between px-6 pt-6 pb-2 shrink-0">
             <h3 className="text-lg font-bold text-gray-800">Skenirajte za prisustvo</h3>
-            <button
-              onClick={() => setQrFullscreen(true)}
-              className="flex items-center gap-2 bg-gray-900 hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all active:scale-95 shadow-sm"
-            >
+            <div className="flex items-center gap-2 bg-gray-900 group-hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all shadow-sm">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V6a2 2 0 012-2h2M4 16v2a2 2 0 002 2h2m8-16h2a2 2 0 012 2v2m0 8v2a2 2 0 01-2 2h-2" />
               </svg>
               Fullscreen
-            </button>
+            </div>
           </div>
 
           <div className="flex-1 flex items-center justify-center min-h-0 bg-white p-8">
             <div className="w-full h-full max-h-[400px] aspect-square flex items-center justify-center transition-all duration-500">
               {token ? (
-                <QRCodeSVG 
-                  value={token} 
+                <QRCodeSVG
+                  value={token}
                   style={{ width: '100%', height: '100%' }}
-                  level="H" 
+                  level="H"
                   includeMargin={false}
                 />
               ) : (
@@ -156,7 +179,6 @@ function LiveSession() {
           </div>
         </div>
 
-        {/* ---- DESNA KARTICA: Lista ---- */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col min-h-0 overflow-hidden transition-all hover:shadow-md">
           <div className="flex justify-between items-center px-6 pt-6 pb-4 shrink-0 border-b border-gray-50">
             <h3 className="text-lg font-bold text-gray-800">Prisutni studenti</h3>
@@ -187,7 +209,7 @@ function LiveSession() {
                         {entry.firstName} {entry.lastName}
                       </span>
                       <span className="text-[11px] text-gray-500 font-medium">
-                         {entry.indexNumber || 'BEZ INDEKSA'} • {entry.email}
+                        {entry.indexNumber || 'BEZ INDEKSA'} • {entry.email}
                       </span>
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -209,15 +231,14 @@ function LiveSession() {
         </div>
       </div>
 
-      {/* QR FULLSCREEN OVERLAY */}
       {qrFullscreen && (
         <div
           className="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center p-8 animate-in fade-in duration-300"
           onClick={() => setQrFullscreen(false)}
         >
           <div className="absolute top-12 right-12 flex flex-col items-end">
-             <p className="text-blue-400 text-xs font-black uppercase tracking-[0.3em] mb-1">Rotacija koda za</p>
-             <span className={`text-8xl font-black tabular-nums ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-800'}`}>
+            <p className="text-blue-400 text-xs font-black uppercase tracking-[0.3em] mb-1">Rotacija koda za</p>
+            <span className={`text-8xl font-black tabular-nums ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-800'}`}>
               {timeLeft}s
             </span>
           </div>
@@ -231,23 +252,22 @@ function LiveSession() {
               />
             )}
           </div>
-          
+
           <button className="mt-12 text-gray-400 text-sm font-medium flex items-center gap-2 hover:text-gray-600 transition-colors">
-             <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs font-sans">ESC</kbd> ili kliknite bilo gdje za zatvaranje
+            <kbd className="px-2 py-1 bg-gray-100 rounded border text-xs font-sans">ESC</kbd> ili kliknite bilo gdje za zatvaranje
           </button>
         </div>
       )}
 
-      {/* DETALJI STUDENTA MODAL */}
       {selectedStudent && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in zoom-in duration-200">
           <div className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl border border-white/20">
             <div className="flex justify-between items-start mb-6">
-               <div>
-                 <h4 className="text-2xl font-black text-gray-900 leading-tight">Detalji prijave</h4>
-                 <p className="text-gray-500 text-xs font-medium mt-1 uppercase tracking-wider">Mrežna verifikacija studenta</p>
-               </div>
-               <button onClick={() => setSelectedStudent(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <div>
+                <h4 className="text-2xl font-black text-gray-900 leading-tight">Detalji prijave</h4>
+                <p className="text-gray-500 text-xs font-medium mt-1 uppercase tracking-wider">Mrežna verifikacija studenta</p>
+              </div>
+              <button onClick={() => setSelectedStudent(null)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
 
             <div className="space-y-4">

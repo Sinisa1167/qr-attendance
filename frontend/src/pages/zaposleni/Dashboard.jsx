@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../../api/axiosInstance'
 import UploadModal from '../../components/UploadModal'
+import { Trash2 } from 'lucide-react'
 
 function Dashboard() {
   const [subjects, setSubjects] = useState([])
@@ -225,10 +226,9 @@ function Dashboard() {
                                     </button>
                                     <button
                                       onClick={() => deleteSubject(group.id)}
-                                      className="text-gray-400 hover:text-red-500 px-1 transition-colors"
-                                    >
-                                      🗑️
-                                    </button>
+                                      className="p-2 text-gray-500 hover:text-red-500 transition-colors">
+                      <Trash2 size={16} />
+                    </button>
                                   </div>
                                 </div>
                               ))}

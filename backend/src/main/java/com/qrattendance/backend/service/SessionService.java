@@ -5,6 +5,7 @@ import com.qrattendance.backend.model.Subject;
 import com.qrattendance.backend.repository.SessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -16,10 +17,15 @@ public class SessionService {
 
     private final SessionRepository sessionRepository;
 
+    @Transactional
     public Session createSession(Session session) {
+        if (session.getStatus() == null) {
+            session.setStatus(Session.SessionStatus.CREATED);
+        }
         return sessionRepository.save(session);
     }
 
+    @Transactional
     public void deleteSession(String id) {
         sessionRepository.deleteById(id);
     }
@@ -29,12 +35,13 @@ public class SessionService {
     }
 
     public List<Session> getSessionsForSubject(Subject subject) {
-        return sessionRepository.findBySubject(subject);
-    }
+        return sessionRepository.findBySubjectOrderByCreatedAtDesc(subject);
+    }   
 
+    @Transactional
     public Session activateSession(Session session) {
-        // PROVJERA: Da li već postoji aktivna sesija za ovaj predmet?
         List<Session> activeOnes = sessionRepository.findBySubjectAndStatus(session.getSubject(), Session.SessionStatus.ACTIVE);
+        
         if (!activeOnes.isEmpty() && !activeOnes.get(0).getId().equals(session.getId())) {
             throw new IllegalStateException("Već postoji aktivna sesija za ovaj predmet.");
         }
@@ -44,6 +51,7 @@ public class SessionService {
         return sessionRepository.save(session);
     }
 
+    @Transactional
     public Session closeSession(Session session) {
         session.setStatus(Session.SessionStatus.CLOSED);
         session.setClosedAt(LocalDateTime.now());

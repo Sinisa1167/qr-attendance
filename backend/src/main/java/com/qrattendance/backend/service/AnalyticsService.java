@@ -22,13 +22,14 @@ public class AnalyticsService {
         Subject subject = subjectService.findById(subjectId)
                 .orElseThrow(() -> new RuntimeException("Predmet nije pronađen"));
 
-        List<Session> closedSessions = sessionRepository.findBySubject(subject).stream()
+        List<Session> closedSessions = sessionRepository.findBySubjectOrderByCreatedAtDesc(subject).stream()
                 .filter(s -> s.getStatus() == Session.SessionStatus.CLOSED)
                 .sorted(Comparator.comparing(Session::getDate))
                 .collect(Collectors.toList());
 
         int totalSessionsCount = closedSessions.size();
 
+        // Mapiramo studente koji su bili prisutni na svakoj sesiji radi brže provjere
         Map<String, Set<String>> sessionAttendedStudentIds = new HashMap<>();
         for (Session s : closedSessions) {
             Set<String> studentIds = attendanceRepository.findBySession(s).stream()
@@ -37,16 +38,18 @@ public class AnalyticsService {
             sessionAttendedStudentIds.put(s.getId(), studentIds);
         }
 
+        // Statistika po sesijama (za grafikone)
         List<SubjectAnalyticsDTO.SessionStat> sessionStats = closedSessions.stream()
                 .map(s -> {
                     SubjectAnalyticsDTO.SessionStat stat = new SubjectAnalyticsDTO.SessionStat();
                     stat.setDate(s.getDate().toString());
                     stat.setActivityType(s.getActivityType().toString());
-                    stat.setCount(sessionAttendedStudentIds.get(s.getId()).size());
+                    stat.setCount(sessionAttendedStudentIds.getOrDefault(s.getId(), Collections.emptySet()).size());
                     return stat;
                 })
                 .collect(Collectors.toList());
 
+        // Zaglavlja za tabelu (session headers)
         List<SubjectAnalyticsDTO.SessionInfo> sessionHeaders = closedSessions.stream()
                 .map(s -> SubjectAnalyticsDTO.SessionInfo.builder()
                         .sessionId(s.getId())
@@ -55,12 +58,14 @@ public class AnalyticsService {
                         .build())
                 .collect(Collectors.toList());
 
+        // Statistika po studentima
         List<SubjectAnalyticsDTO.StudentStat> studentStats = subject.getStudents().stream()
                 .map(student -> {
                     Map<String, Boolean> sessionAttendance = new LinkedHashMap<>();
                     long attended = 0;
                     for (Session s : closedSessions) {
-                        boolean wasPresent = sessionAttendedStudentIds.get(s.getId()).contains(student.getId());
+                        boolean wasPresent = sessionAttendedStudentIds.getOrDefault(s.getId(), Collections.emptySet())
+                                .contains(student.getId());
                         sessionAttendance.put(s.getId(), wasPresent);
                         if (wasPresent) attended++;
                     }
@@ -81,7 +86,8 @@ public class AnalyticsService {
                 .sorted(Comparator.comparing(SubjectAnalyticsDTO.StudentStat::getPercentage).reversed())
                 .collect(Collectors.toList());
 
-        Map<String, Double> groupStats = calculateGroupStats(studentStats);
+        // Računanje grupne statistike na osnovu tipa nastave (Predavanja/Vježbe vs Laboratorija)
+        Map<String, Double> groupStats = calculateGroupStats(studentStats, subject.getTeachingType());
 
         return SubjectAnalyticsDTO.builder()
                 .subjectName(subject.getName() + " (" + subject.getTeachingType() + ")")
@@ -97,10 +103,16 @@ public class AnalyticsService {
                 .build();
     }
 
-    private Map<String, Double> calculateGroupStats(List<SubjectAnalyticsDTO.StudentStat> studentStats) {
+    private Map<String, Double> calculateGroupStats(List<SubjectAnalyticsDTO.StudentStat> studentStats, String teachingType) {
         return studentStats.stream()
                 .collect(Collectors.groupingBy(
-                        s -> determineAuditoryGroup(s.getIndex()),
+                        s -> {
+                            if ("LABORATORIJSKE_VJEZBE".equalsIgnoreCase(teachingType)) {
+                                return determineLaboratoryGroup(s.getIndex());
+                            } else {
+                                return determineAuditoryGroup(s.getIndex());
+                            }
+                        },
                         Collectors.averagingDouble(SubjectAnalyticsDTO.StudentStat::getPercentage)
                 ));
     }

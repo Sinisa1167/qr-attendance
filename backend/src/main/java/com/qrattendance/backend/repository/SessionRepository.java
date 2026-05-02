@@ -8,8 +8,10 @@ import java.util.List;
 
 @Repository
 public interface SessionRepository extends JpaRepository<Session, String> {
+
+    List<Session> findBySubjectOrderByCreatedAtDesc(Subject subject);
     
-    List<Session> findBySubject(Subject subject);
     List<Session> findByStatus(Session.SessionStatus status);
+    
     List<Session> findBySubjectAndStatus(Subject subject, Session.SessionStatus status);
 }

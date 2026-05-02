@@ -1,15 +1,10 @@
 const CACHE_NAME = 'qr-attendance-v1'
 const OFFLINE_URL = '/offline.html'
 
-const STATIC_ASSETS = [
-  '/',
-  '/offline.html',
-]
-
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS)
+      return cache.add(OFFLINE_URL)
     })
   )
   self.skipWaiting()
@@ -29,20 +24,18 @@ self.addEventListener('activate', (event) => {
 })
 
 self.addEventListener('fetch', (event) => {
+  if (event.request.url.includes('/api/') || 
+      event.request.url.includes(':8081') || 
+      event.request.url.includes(':8080')) {
+    return
+  }
+
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => {
-        return caches.open(CACHE_NAME).then((cache) => {
-          return cache.match(OFFLINE_URL)
-        })
+        return caches.match(OFFLINE_URL)
       })
     )
     return
   }
-
-  event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request)
-    })
-  )
 })
