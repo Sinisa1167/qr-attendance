@@ -1,7 +1,25 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../../api/axiosInstance'
-import { Trash2, Trash2Icon } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
+
+const ACTIVITY_TYPE_MAP = {
+  'лабораторијске вјежбе': 'LABORATORIJSKE_VJEZBE',
+  'laboratorijske vjezbe': 'LABORATORIJSKE_VJEZBE',
+  'лабораторијске вежбе': 'LABORATORIJSKE_VJEZBE',
+  'auditorne vjezbe': 'AUDITORNE_VJEZBE',
+  'аудиторне вјежбе': 'AUDITORNE_VJEZBE',
+  'вјежбе': 'AUDITORNE_VJEZBE',
+  'vjezbe': 'AUDITORNE_VJEZBE',
+  'predavanje': 'PREDAVANJE',
+  'предавање': 'PREDAVANJE',
+}
+
+function mapTeachingType(teachingType) {
+  if (!teachingType) return 'PREDAVANJE'
+  const key = teachingType.toLowerCase().trim()
+  return ACTIVITY_TYPE_MAP[key] || 'PREDAVANJE'
+}
 
 function Sessions() {
   const { subjectId } = useParams()
@@ -10,92 +28,95 @@ function Sessions() {
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
-  
-  const [newSession, setNewSession] = useState({
-    activityType: 'PREDAVANJE',
-    date: new Date().toISOString().split('T')[0],
-    startTime: '08:00',
-    endTime: '09:30',   
-  })
+  const [newSession, setNewSession] = useState(null)
 
   useEffect(() => {
     fetchData()
   }, [subjectId])
 
-  const fetchSessions = async () => {
-  try {
-    const res = await api.get(`/api/admin/sessions/subject/${subjectId}`)
-    console.log('Sesije sa servera:', res.data)
-    const sorted = res.data.sort((a, b) => {
-      const order = { ACTIVE: 0, CREATED: 1, CLOSED: 2 }
-      return order[a.status] - order[b.status]
-    })
-    console.log('Sortirane sesije:', sorted)
-    setSessions(sorted)
-  } catch (err) {
-    console.error("Greška pri učitavanju sesija:", err)
-  }
-}
+  const fetchData = async () => {
+    try {
+      const [subjectsRes, sessionsRes] = await Promise.all([
+        api.get('/api/admin/subjects'),
+        api.get(`/api/admin/sessions/subject/${subjectId}`)
+      ])
+      const found = subjectsRes.data.find(s => s.id.toString() === subjectId.toString())
+      setSubject(found)
 
-const fetchData = async () => {
-  try {
-    const [subjectsRes, sessionsRes] = await Promise.all([
-      api.get('/api/admin/subjects'),
-      api.get(`/api/admin/sessions/subject/${subjectId}`)
-    ])
-    const found = subjectsRes.data.find(s => s.id.toString() === subjectId.toString())
-    setSubject(found)
-    const sorted = sessionsRes.data.sort((a, b) => {
-      const order = { ACTIVE: 0, CREATED: 1, CLOSED: 2 }
-      return order[a.status] - order[b.status]
-    })
-    setSessions(sorted)
-  } catch (err) {
-    console.error("Greška pri učitavanju:", err)
-  } finally {
-    setLoading(false)
+      // Postavi defaulte na osnovu predmeta
+      if (found) {
+        setNewSession({
+          activityType: mapTeachingType(found.teachingType),
+          date: new Date().toISOString().split('T')[0],
+          startTime: '08:00',
+          endTime: '09:30',
+          groupNumber: found.groupName || '1',
+        })
+      }
+
+      const sorted = sessionsRes.data.sort((a, b) => {
+        const order = { ACTIVE: 0, CREATED: 1, CLOSED: 2 }
+        return order[a.status] - order[b.status]
+      })
+      setSessions(sorted)
+    } catch (err) {
+      console.error("Greška pri učitavanju:", err)
+    } finally {
+      setLoading(false)
+    }
   }
-}
+
+  const fetchSessions = async () => {
+    try {
+      const res = await api.get(`/api/admin/sessions/subject/${subjectId}`)
+      const sorted = res.data.sort((a, b) => {
+        const order = { ACTIVE: 0, CREATED: 1, CLOSED: 2 }
+        return order[a.status] - order[b.status]
+      })
+      setSessions(sorted)
+    } catch (err) {
+      console.error("Greška pri učitavanju sesija:", err)
+    }
+  }
 
   const createSession = async () => {
-  if (!newSession.date || !newSession.startTime || !newSession.endTime) {
-    alert("Molimo popunite sva polja")
-    return
-  }
-  try {
-    const sessionData = {
-      subject: { id: subjectId },
-      ...newSession,
-      groupNumber: subject?.groupName,
-      status: 'CREATED'
+    if (!newSession.date || !newSession.startTime || !newSession.endTime) {
+      alert("Molimo popunite sva polja")
+      return
     }
-    const res = await api.post('/api/admin/sessions', sessionData)
-    setShowCreateForm(false)
-    await fetchSessions()
-  } catch (err) {
-    alert("Greška pri kreiranju sesije")
+    try {
+      const sessionData = {
+        subject: { id: subjectId },
+        ...newSession,
+        status: 'CREATED'
+      }
+      await api.post('/api/admin/sessions', sessionData)
+      setShowCreateForm(false)
+      await fetchSessions()
+    } catch (err) {
+      alert("Greška pri kreiranju sesije")
+    }
   }
-}
 
-const deleteSession = async (sessionId) => {
-  if (!window.confirm('Da li ste sigurni da želite obrisati ovu sesiju?')) return
-  try {
-    await api.delete(`/api/admin/sessions/${sessionId}`)
-    await fetchSessions()
-  } catch (err) {
-    alert(err.response?.data?.error || 'Greška pri brisanju sesije')
+  const deleteSession = async (sessionId) => {
+    if (!window.confirm('Da li ste sigurni da želite obrisati ovu sesiju?')) return
+    try {
+      await api.delete(`/api/admin/sessions/${sessionId}`)
+      await fetchSessions()
+    } catch (err) {
+      alert(err.response?.data?.error || 'Greška pri brisanju sesije')
+    }
   }
-}
 
-const closeSession = async (sessionId) => {
-  if (!window.confirm('Zatvori sesiju? Nakon zatvaranja prijave više nisu moguće.')) return
-  try {
-    await api.post(`/api/admin/sessions/${sessionId}/close`)
-    await fetchSessions()
-  } catch (err) {
-    console.error(err)
+  const closeSession = async (sessionId) => {
+    if (!window.confirm('Zatvori sesiju? Nakon zatvaranja prijave više nisu moguće.')) return
+    try {
+      await api.post(`/api/admin/sessions/${sessionId}/close`)
+      await fetchSessions()
+    } catch (err) {
+      console.error(err)
+    }
   }
-}
 
   const activateSession = async (sessionId) => {
     try {
@@ -106,11 +127,8 @@ const closeSession = async (sessionId) => {
     }
   }
 
-
   const sessionFilename = (session, ext) => {
-    const tip = (session.activityType || 'Sesija')
-      .replace(/_/g, '-')
-      .toLowerCase()
+    const tip = (session.activityType || 'Sesija').replace(/_/g, '-').toLowerCase()
     const datum = session.date
       ? new Date(session.date).toLocaleDateString('de-DE').replace(/\./g, '-').replace(/-+$/, '')
       : 'datum'
@@ -128,7 +146,6 @@ const closeSession = async (sessionId) => {
       link.click()
       window.URL.revokeObjectURL(link.href)
     } catch (err) {
-      console.error('Greška pri downloadu', err)
       alert("Greška prilikom generisanja fajla.")
     }
   }
@@ -140,7 +157,6 @@ const closeSession = async (sessionId) => {
       CREATED: 'bg-blue-100 text-blue-700 border-blue-200'
     }
     const labels = { ACTIVE: 'Aktivna', CLOSED: 'Zatvorena', CREATED: 'Kreirana' }
-    
     return (
       <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full border ${styles[status] || styles.CREATED}`}>
         {labels[status] || status}
@@ -148,7 +164,7 @@ const closeSession = async (sessionId) => {
     )
   }
 
-  if (loading) return (
+  if (loading || !newSession) return (
     <div className="flex justify-center items-center h-64">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
     </div>
@@ -176,7 +192,6 @@ const closeSession = async (sessionId) => {
         </div>
 
         <div className="flex flex-col gap-2 w-full md:w-auto">
-          {/* Analitika predmeta prebačena ovdje */}
           <button
             onClick={() => navigate(`/subject/${subjectId}/analytics`)}
             className="flex items-center justify-center gap-2 bg-violet-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-violet-700 transition-all text-sm shadow-lg shadow-violet-100"
@@ -214,8 +229,8 @@ const closeSession = async (sessionId) => {
       {showCreateForm && (
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
           <h4 className="font-bold text-blue-900 mb-4">Parametri nove sesije</h4>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-1">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div>
               <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1 ml-1">Tip</label>
               <select
                 value={newSession.activityType}
@@ -226,6 +241,16 @@ const closeSession = async (sessionId) => {
                 <option value="AUDITORNE_VJEZBE">Auditorne vježbe</option>
                 <option value="LABORATORIJSKE_VJEZBE">Laboratorijske vježbe</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1 ml-1">Grupa</label>
+              <input
+                type="text"
+                value={newSession.groupNumber}
+                onChange={(e) => setNewSession({...newSession, groupNumber: e.target.value})}
+                className="w-full bg-white border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
+                placeholder="npr. G1"
+              />
             </div>
             <div>
               <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1 ml-1">Datum</label>
@@ -274,8 +299,8 @@ const closeSession = async (sessionId) => {
           </div>
         ) : (
           sessions.map((session) => (
-            <div 
-              key={session.id} 
+            <div
+              key={session.id}
               className="group bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row justify-between items-center gap-4"
             >
               <div className="flex items-center gap-4 w-full md:w-auto">
@@ -287,6 +312,11 @@ const closeSession = async (sessionId) => {
                     <span className="font-bold text-gray-800">
                       {session.activityType?.replace(/_/g, ' ')}
                     </span>
+                    {session.groupNumber && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                        Grupa {session.groupNumber}
+                      </span>
+                    )}
                     {getStatusBadge(session.status)}
                   </div>
                   <p className="text-gray-500 text-xs font-mono font-medium">
@@ -298,14 +328,14 @@ const closeSession = async (sessionId) => {
               <div className="flex gap-2 w-full md:w-auto justify-end flex-wrap">
                 {session.status === 'CREATED' && (
                   <>
-                    <button 
-                      onClick={() => activateSession(session.id)} 
+                    <button
+                      onClick={() => activateSession(session.id)}
                       className="flex-1 md:flex-none bg-green-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-green-700 transition-all text-xs"
                     >
                       Aktiviraj
                     </button>
-                    <button 
-                      onClick={() => deleteSession(session.id)} 
+                    <button
+                      onClick={() => deleteSession(session.id)}
                       className="p-2 text-gray-400 hover:text-red-500 transition-colors">
                       <Trash2 size={16} />
                     </button>
@@ -314,14 +344,14 @@ const closeSession = async (sessionId) => {
 
                 {session.status === 'ACTIVE' && (
                   <>
-                    <button 
-                      onClick={() => navigate(`/session/${session.id}/live`)} 
+                    <button
+                      onClick={() => navigate(`/session/${session.id}/live`)}
                       className="flex-1 md:flex-none bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 transition-all text-xs"
                     >
                       Live Monitor
                     </button>
-                    <button 
-                      onClick={() => closeSession(session.id)} 
+                    <button
+                      onClick={() => closeSession(session.id)}
                       className="flex-1 md:flex-none bg-red-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-red-600 transition-all text-xs"
                     >
                       Zatvori
@@ -331,20 +361,20 @@ const closeSession = async (sessionId) => {
 
                 {session.status === 'CLOSED' && (
                   <div className="flex gap-2 items-center">
-                    <button 
-                      onClick={() => downloadFile(`/api/admin/export/session/${session.id}/xlsx`, sessionFilename(session, 'xlsx'))} 
+                    <button
+                      onClick={() => downloadFile(`/api/admin/export/session/${session.id}/xlsx`, sessionFilename(session, 'xlsx'))}
                       className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-lg font-bold hover:bg-emerald-100 transition-all text-[10px] uppercase border border-emerald-100"
                     >
                       xlsx
                     </button>
-                    <button 
-                      onClick={() => downloadFile(`/api/admin/export/session/${session.id}/pdf`, sessionFilename(session, 'pdf'))} 
+                    <button
+                      onClick={() => downloadFile(`/api/admin/export/session/${session.id}/pdf`, sessionFilename(session, 'pdf'))}
                       className="bg-red-50 text-red-700 px-3 py-2 rounded-lg font-bold hover:bg-red-100 transition-all text-[10px] uppercase border border-red-100"
                     >
                       pdf
                     </button>
-                    <button 
-                      onClick={() => deleteSession(session.id)} 
+                    <button
+                      onClick={() => deleteSession(session.id)}
                       className="p-2 text-gray-400 hover:text-red-500 transition-colors">
                       <Trash2 size={16} />
                     </button>

@@ -3,6 +3,7 @@ package com.qrattendance.backend.service;
 import com.qrattendance.backend.model.User;
 import com.qrattendance.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
@@ -14,16 +15,18 @@ public class UserService {
 
     private final UserRepository userRepository;
 
+    @Value("${app.employee-email-domain}")
+    private String employeeEmailDomain;
+
     public User getOrCreateUser(Jwt jwt) {
         String email = jwt.getClaimAsString("email");
-        
+
         User user = userRepository.findByEmail(email).orElseGet(() -> {
             User newUser = new User();
             newUser.setEmail(email);
             return newUser;
         });
 
-        // Sinhronizacija: Uvijek osvježi podatke iz JWT-a
         user.setFirstName(jwt.getClaimAsString("given_name"));
         user.setLastName(jwt.getClaimAsString("family_name"));
         user.setRole(determineRole(jwt));
@@ -38,6 +41,10 @@ public class UserService {
             if (roles != null && roles.contains("ZAPOSLENI")) {
                 return User.UserRole.ZAPOSLENI;
             }
+        }
+        String email = jwt.getClaimAsString("email");
+        if (email != null && email.endsWith("@" + employeeEmailDomain)) {
+            return User.UserRole.ZAPOSLENI;
         }
         return User.UserRole.STUDENT;
     }

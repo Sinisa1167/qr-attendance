@@ -12,3 +12,6 @@ eureka:
     fetch-registry: true
   instance:
     prefer-ip-address: true
+
+app:
+  employee-email-domain: ${EMPLOYEE_EMAIL_DOMAIN}

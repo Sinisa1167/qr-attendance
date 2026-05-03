@@ -13,10 +13,13 @@ services:
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
       KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM}
       QR_REFRESH_INTERVAL: ${QR_REFRESH_INTERVAL}
+      QR_SECRET: ${QR_SECRET}
       ATTENDANCE_THRESHOLD: ${ATTENDANCE_THRESHOLD}
       STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN}
+      EMPLOYEE_EMAIL_DOMAIN: ${EMPLOYEE_EMAIL_DOMAIN}
     networks:
       - qr-network
     healthcheck:
@@ -36,8 +39,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - qr-network
     ports:
       - "8081:8081"
     environment:
@@ -47,12 +48,15 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       REDIS_HOST: redis
-      KEYCLOAK_URL: http://keycloak:8080
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://192.168.1.7:8080/realms/qr-attendance
       KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI}
       QR_REFRESH_INTERVAL: ${QR_REFRESH_INTERVAL}
+      QR_SECRET: ${QR_SECRET}
       ATTENDANCE_THRESHOLD: ${ATTENDANCE_THRESHOLD}
       STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN}
+      EMPLOYEE_EMAIL_DOMAIN: ${EMPLOYEE_EMAIL_DOMAIN}
+    networks:
+      - qr-network
 
   postgres:
     image: postgres:16
