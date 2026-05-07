@@ -7,6 +7,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -23,6 +24,7 @@ public class ExcelParserService {
     @Value("${app.student-email-domain}")
     private String studentEmailDomain;
 
+    @Transactional
     public Subject parseAndSave(MultipartFile file, User createdBy) throws IOException {
         String filename = file.getOriginalFilename();
         if (filename != null && filename.endsWith(".csv")) {
@@ -31,6 +33,7 @@ public class ExcelParserService {
         return parseAndSaveXlsx(file, createdBy);
     }
 
+    @Transactional
     public Subject parseAndSaveXlsx(MultipartFile file, User createdBy) throws IOException {
         try (Workbook workbook = new XSSFWorkbook(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
@@ -45,17 +48,15 @@ public class ExcelParserService {
                 throw new IllegalArgumentException("Neispravan Excel format – nema reda sa metapodacima (red 5).");
             }
 
-            // Ekstrakcija metapodataka za provjeru
             String name = getCell(metaRow, 7, formatter);
             String code = getCell(metaRow, 9, formatter);
             String teachingType = getCell(metaRow, 19, formatter);
             String groupName = getCell(metaRow, 21, formatter);
 
-            // --- PROVJERA DUPLIKATA ---
             if (subjectService.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
                     code, teachingType, groupName, academicYear)) {
                 throw new IllegalArgumentException(
-                        String.format("Predmet '%s' (Grupa: %s, Tip: %s) već postoji za akademsku godinu %s.", 
+                        String.format("Predmet '%s' (Grupa: %s, Tip: %s) već postoji za akademsku godinu %s.",
                         name, groupName, teachingType, academicYear));
             }
 
@@ -75,32 +76,57 @@ public class ExcelParserService {
 
             int startRow = findStudentStartRow(sheet, formatter);
             List<User> students = new ArrayList<>();
+            int emptyRowCount = 0;
 
             for (int i = startRow; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
-                if (row == null) continue;
+                if (row == null) {
+                    emptyRowCount++;
+                    if (emptyRowCount > 3) break;
+                    continue;
+                }
 
                 String lastName = getCell(row, 1, formatter);
                 String firstName = getCell(row, 2, formatter);
                 String indexNumber = getCell(row, 3, formatter);
                 String studentStatus = getCell(row, 4, formatter);
 
-                if (indexNumber.isBlank()) break;
+                if (indexNumber.isBlank()) {
+                    emptyRowCount++;
+                    if (emptyRowCount > 3) break;
+                    continue;
+                }
+
+                emptyRowCount = 0;
+
                 if (firstName.isBlank() || lastName.isBlank()) continue;
 
                 String email = generateEmail(firstName, lastName);
-                
+
                 User student = userService.findByEmail(email)
+                        .map(existing -> {
+                            if (existing.getFirstName() == null || existing.getFirstName().isBlank()) {
+                                existing.setFirstName(firstName);
+                                existing.setLastName(lastName);
+                                existing.setIndexNumber(indexNumber);
+                                existing.setStudentStatus(studentStatus);
+                                return userService.save(existing);
+                            }
+                            return existing;
+                        })
                         .orElseGet(() -> createNewStudent(firstName, lastName, email, indexNumber, studentStatus));
                 students.add(student);
             }
 
-            savedSubject.setStudents(students);
-            return subjectService.save(savedSubject);
+            Subject freshSubject = subjectService.findById(savedSubject.getId())
+                    .orElseThrow(() -> new RuntimeException("Predmet nije pronađen"));
+            freshSubject.getStudents().addAll(students);
+            return subjectService.save(freshSubject);
         }
     }
 
-    private Subject parseAndSaveCsv(MultipartFile file, User createdBy) throws IOException {
+    @Transactional
+    public Subject parseAndSaveCsv(MultipartFile file, User createdBy) throws IOException {
         try (var reader = new java.io.BufferedReader(
                 new java.io.InputStreamReader(file.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
 
@@ -121,11 +147,10 @@ public class ExcelParserService {
             String teachingType = getcsv(metaRow, 19);
             String groupName = getcsv(metaRow, 21);
 
-            // --- PROVJERA DUPLIKATA ---
             if (subjectService.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
                     code, teachingType, groupName, academicYear)) {
                 throw new IllegalArgumentException(
-                        String.format("Predmet '%s' (Grupa: %s, Tip: %s) već postoji za akademsku godinu %s.", 
+                        String.format("Predmet '%s' (Grupa: %s, Tip: %s) već postoji za akademsku godinu %s.",
                         name, groupName, teachingType, academicYear));
             }
 
@@ -154,27 +179,52 @@ public class ExcelParserService {
             }
 
             List<User> students = new ArrayList<>();
+            int emptyRowCount = 0;
+
             for (int i = startRow; i < rows.size(); i++) {
                 String[] row = rows.get(i);
-                if (row.length < 4) continue;
+                if (row.length < 4) {
+                    emptyRowCount++;
+                    if (emptyRowCount > 3) break;
+                    continue;
+                }
 
                 String lastName = getcsv(row, 1);
                 String firstName = getcsv(row, 2);
                 String indexNumber = getcsv(row, 3);
                 String studentStatus = row.length > 4 ? getcsv(row, 4) : "";
 
-                if (indexNumber.isBlank()) break;
+                if (indexNumber.isBlank()) {
+                    emptyRowCount++;
+                    if (emptyRowCount > 3) break;
+                    continue;
+                }
+
+                emptyRowCount = 0;
+
                 if (firstName.isBlank() || lastName.isBlank()) continue;
 
                 String email = generateEmail(firstName, lastName);
 
                 User student = userService.findByEmail(email)
+                        .map(existing -> {
+                            if (existing.getFirstName() == null || existing.getFirstName().isBlank()) {
+                                existing.setFirstName(firstName);
+                                existing.setLastName(lastName);
+                                existing.setIndexNumber(indexNumber);
+                                existing.setStudentStatus(studentStatus);
+                                return userService.save(existing);
+                            }
+                            return existing;
+                        })
                         .orElseGet(() -> createNewStudent(firstName, lastName, email, indexNumber, studentStatus));
                 students.add(student);
             }
 
-            savedSubject.setStudents(students);
-            return subjectService.save(savedSubject);
+            Subject freshSubject = subjectService.findById(savedSubject.getId())
+                    .orElseThrow(() -> new RuntimeException("Predmet nije pronađen"));
+            freshSubject.getStudents().addAll(students);
+            return subjectService.save(freshSubject);
         }
     }
 
@@ -240,7 +290,7 @@ public class ExcelParserService {
     }
 
     private String extractAcademicYear(String title) {
-        try {   
+        try {
             java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\d{4}");
             java.util.regex.Matcher matcher = pattern.matcher(title);
             if (matcher.find()) {

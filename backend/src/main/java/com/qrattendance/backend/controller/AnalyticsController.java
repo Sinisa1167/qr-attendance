@@ -33,6 +33,7 @@ public class AnalyticsController {
         Map<String, Object> response = new HashMap<>();
         response.put("subjectName", dto.getSubjectName());
         response.put("groupName", subject.getGroupName());
+        response.put("subjectCode", subject.getCode());
         response.put("totalSessions", dto.getTotalSessions());
         response.put("threshold", defaultThreshold);
 

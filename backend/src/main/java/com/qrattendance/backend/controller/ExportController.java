@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,18 +25,15 @@ public class ExportController {
     private final SessionService sessionService;
     private final SubjectService subjectService;
 
-    // Export pojedinacne sesije - xlsx
+    @Transactional
     @GetMapping("/session/{sessionId}/xlsx")
     public ResponseEntity<byte[]> exportSessionXlsx(
             @PathVariable String sessionId,
             @AuthenticationPrincipal Jwt jwt) {
-
         try {
             Session session = sessionService.findById(sessionId)
                     .orElseThrow(() -> new RuntimeException("Sesija nije pronađena"));
-
             byte[] data = exportService.exportSessionToXlsx(session);
-
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION,
                             "attachment; filename=prisustvo_" + sessionId + ".xlsx")
@@ -47,18 +45,15 @@ public class ExportController {
         }
     }
 
-    // Export pojedinacne sesije - pdf
+    @Transactional
     @GetMapping("/session/{sessionId}/pdf")
     public ResponseEntity<byte[]> exportSessionPdf(
             @PathVariable String sessionId,
             @AuthenticationPrincipal Jwt jwt) {
-
         try {
             Session session = sessionService.findById(sessionId)
                     .orElseThrow(() -> new RuntimeException("Sesija nije pronađena"));
-
             byte[] data = exportService.exportSessionToPdf(session);
-
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION,
                             "attachment; filename=prisustvo_" + sessionId + ".pdf")
@@ -69,19 +64,16 @@ public class ExportController {
         }
     }
 
-    // Export kumulativni za predmet - xlsx
+    @Transactional
     @GetMapping("/subject/{subjectId}/xlsx")
     public ResponseEntity<byte[]> exportSubjectXlsx(
             @PathVariable String subjectId,
             @AuthenticationPrincipal Jwt jwt) {
-
         try {
             Subject subject = subjectService.findById(subjectId)
                     .orElseThrow(() -> new RuntimeException("Predmet nije pronađen"));
-
             List<Session> sessions = sessionService.getSessionsForSubject(subject);
             byte[] data = exportService.exportSubjectToXlsx(subject, sessions);
-
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION,
                             "attachment; filename=prisustvo_" + subject.getCode() + ".xlsx")
@@ -93,19 +85,16 @@ public class ExportController {
         }
     }
 
-    // Export kumulativni za predmet - pdf
+    @Transactional
     @GetMapping("/subject/{subjectId}/pdf")
     public ResponseEntity<byte[]> exportSubjectPdf(
             @PathVariable String subjectId,
             @AuthenticationPrincipal Jwt jwt) {
-
         try {
             Subject subject = subjectService.findById(subjectId)
                     .orElseThrow(() -> new RuntimeException("Predmet nije pronađen"));
-
             List<Session> sessions = sessionService.getSessionsForSubject(subject);
             byte[] data = exportService.exportSubjectToPdf(subject, sessions);
-
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION,
                             "attachment; filename=prisustvo_" + subject.getCode() + ".pdf")

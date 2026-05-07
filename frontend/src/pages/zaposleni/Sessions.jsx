@@ -200,13 +200,13 @@ function Sessions() {
           </button>
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/xlsx`, `Izvjestaj_${subject?.code}.xlsx`)}
+              onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/xlsx`, `Analitika_${subject?.code}_${subject?.teachingType?.replace(/\s+/g, '_') || ''}.xlsx`)}
               className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 transition-all text-xs"
             >
               📊 XLSX
             </button>
             <button
-              onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/pdf`, `Izvjestaj_${subject?.code}.pdf`)}
+              onClick={() => downloadFile(`/api/admin/export/subject/${subjectId}/pdf`, `Analitika_${subject?.code}_${subject?.teachingType?.replace(/\s+/g, '_') || ''}.pdf`)}
               className="flex items-center justify-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-red-600 transition-all text-xs"
             >
               📄 PDF
@@ -215,7 +215,7 @@ function Sessions() {
         </div>
       </div>
 
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center   mb-6">
         <h3 className="text-xl font-bold text-gray-800">Istorija sesija</h3>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}

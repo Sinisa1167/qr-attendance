@@ -24,7 +24,7 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        // Pokreni samo ako baza prazna
+     /*   // Pokreni samo ako baza prazna
         if (subjectRepository.count() > 0) {
             System.out.println("=== Baza već ima podatke, preskačem inicijalizaciju ===");
             return;
@@ -174,6 +174,6 @@ public class DataInitializer implements CommandLineRunner {
                 a.setTokenUsed("mock-token-" + i + "-" + student.getId().substring(0, 8));
                 attendanceRepository.save(a);
             }
-        }
+        }*/
     }
 }

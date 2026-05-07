@@ -15,7 +15,7 @@ function Analytics() {
   const [sortDirection, setSortDirection] = useState('desc')
   const [showCharts, setShowCharts] = useState(false)
   const [showMatrix, setShowMatrix] = useState(false)
-  const [showTable, setShowTable] = useState(true) // Dodato: Kontrola tabele
+  const [showTable, setShowTable] = useState(true)
   const [filter, setFilter] = useState(FILTER_ALL)
 
   useEffect(() => {
@@ -27,7 +27,8 @@ function Analytics() {
   const downloadReport = async (format) => {
     try {
       const url = `/api/admin/export/subject/${subjectId}/${format}`
-      const filename = `Analitika_${data?.subjectName?.replace(/\s+/g, '_') || 'Predmet'}.${format}`
+      const teachingType = data?.subjectName?.match(/\(([^)]+)\)/)?.[1]?.replace(/\s+/g, '_') || ''
+      const filename = `Analitika_${data?.subjectCode || 'Predmet'}_${teachingType}.${format}`
       const response = await api.get(url, { responseType: 'blob' })
       const blob = new Blob([response.data], {
         type: format === 'xlsx'
