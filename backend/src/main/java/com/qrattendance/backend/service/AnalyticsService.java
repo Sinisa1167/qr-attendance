@@ -1,11 +1,14 @@
 package com.qrattendance.backend.service;
 
+import com.qrattendance.backend.config.GroupRulesConfig;
 import com.qrattendance.backend.dto.SubjectAnalyticsDTO;
 import com.qrattendance.backend.model.*;
 import com.qrattendance.backend.repository.AttendanceRepository;
 import com.qrattendance.backend.repository.SessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import java.util.NoSuchElementException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -17,10 +20,12 @@ public class AnalyticsService {
     private final AttendanceRepository attendanceRepository;
     private final SessionRepository sessionRepository;
     private final SubjectService subjectService;
+    private final ExcelParserService excelParserService;
 
-    public SubjectAnalyticsDTO getSubjectAnalytics(String subjectId, double threshold) {
-        Subject subject = subjectService.findById(subjectId)
-                .orElseThrow(() -> new RuntimeException("Predmet nije pronađen"));
+    @Transactional(readOnly = true)
+	public SubjectAnalyticsDTO getSubjectAnalytics(String subjectId, double threshold) {
+                Subject subject = subjectService.findById(subjectId)
+                .orElseThrow(() -> new NoSuchElementException("Predmet nije pronađen"));
 
         List<Session> closedSessions = sessionRepository.findBySubjectOrderByCreatedAtDesc(subject).stream()
                 .filter(s -> s.getStatus() == Session.SessionStatus.CLOSED)
@@ -29,7 +34,6 @@ public class AnalyticsService {
 
         int totalSessionsCount = closedSessions.size();
 
-        // Mapiramo studente koji su bili prisutni na svakoj sesiji radi brže provjere
         Map<String, Set<String>> sessionAttendedStudentIds = new HashMap<>();
         for (Session s : closedSessions) {
             Set<String> studentIds = attendanceRepository.findBySession(s).stream()
@@ -38,7 +42,6 @@ public class AnalyticsService {
             sessionAttendedStudentIds.put(s.getId(), studentIds);
         }
 
-        // Statistika po sesijama (za grafikone)
         List<SubjectAnalyticsDTO.SessionStat> sessionStats = closedSessions.stream()
                 .map(s -> {
                     SubjectAnalyticsDTO.SessionStat stat = new SubjectAnalyticsDTO.SessionStat();
@@ -49,7 +52,6 @@ public class AnalyticsService {
                 })
                 .collect(Collectors.toList());
 
-        // Zaglavlja za tabelu (session headers)
         List<SubjectAnalyticsDTO.SessionInfo> sessionHeaders = closedSessions.stream()
                 .map(s -> SubjectAnalyticsDTO.SessionInfo.builder()
                         .sessionId(s.getId())
@@ -58,13 +60,13 @@ public class AnalyticsService {
                         .build())
                 .collect(Collectors.toList());
 
-        // Statistika po studentima
         List<SubjectAnalyticsDTO.StudentStat> studentStats = subject.getStudents().stream()
                 .map(student -> {
                     Map<String, Boolean> sessionAttendance = new LinkedHashMap<>();
                     long attended = 0;
                     for (Session s : closedSessions) {
-                        boolean wasPresent = sessionAttendedStudentIds.getOrDefault(s.getId(), Collections.emptySet())
+                        boolean wasPresent = sessionAttendedStudentIds
+                                .getOrDefault(s.getId(), Collections.emptySet())
                                 .contains(student.getId());
                         sessionAttendance.put(s.getId(), wasPresent);
                         if (wasPresent) attended++;
@@ -86,7 +88,6 @@ public class AnalyticsService {
                 .sorted(Comparator.comparing(SubjectAnalyticsDTO.StudentStat::getPercentage).reversed())
                 .collect(Collectors.toList());
 
-        // Računanje grupne statistike na osnovu tipa nastave (Predavanja/Vježbe vs Laboratorija)
         Map<String, Double> groupStats = calculateGroupStats(studentStats, subject.getTeachingType());
 
         return SubjectAnalyticsDTO.builder()
@@ -103,52 +104,17 @@ public class AnalyticsService {
                 .build();
     }
 
-    private Map<String, Double> calculateGroupStats(List<SubjectAnalyticsDTO.StudentStat> studentStats, String teachingType) {
+    private Map<String, Double> calculateGroupStats(
+            List<SubjectAnalyticsDTO.StudentStat> studentStats, String teachingType) {
+
+        List<GroupRulesConfig.GroupDef> rules = excelParserService.isLaboratorijske(teachingType)
+                ? excelParserService.getLaboratorijskeRules()
+                : excelParserService.getAuditorneRules();
+
         return studentStats.stream()
                 .collect(Collectors.groupingBy(
-                        s -> {
-                            if ("LABORATORIJSKE_VJEZBE".equalsIgnoreCase(teachingType)) {
-                                return determineLaboratoryGroup(s.getIndex());
-                            } else {
-                                return determineAuditoryGroup(s.getIndex());
-                            }
-                        },
+                        s -> excelParserService.resolveGroupForIndex(s.getIndex(), rules),
                         Collectors.averagingDouble(SubjectAnalyticsDTO.StudentStat::getPercentage)
                 ));
-    }
-
-    public static String determineAuditoryGroup(String index) {
-        if (index == null || !index.contains("/")) return "Ostali";
-        try {
-            int num = Integer.parseInt(index.split("/")[0]);
-            if (num >= 1101 && num <= 1159)   return "Г1";
-            if (num >= 1160 && num <= 11117)  return "Г2";
-            if ((num >= 11118 && num <= 11123) || (num >= 1201 && num <= 1252)) return "Г3";
-            if ((num >= 1253 && num <= 1255)  || (num >= 1301 && num <= 1353)) return "Г4";
-            return "Ostali";
-        } catch (Exception e) {
-            return "Nepoznat format";
-        }
-    }
-
-    public static String determineLaboratoryGroup(String index) {
-        if (index == null || !index.contains("/")) return "Ostali";
-        try {
-            int num = Integer.parseInt(index.split("/")[0]);
-            if (num >= 1101  && num <= 1121)  return "Л1";
-            if (num >= 1122  && num <= 1144)  return "Л2";
-            if (num >= 1145  && num <= 1165)  return "Л3";
-            if (num >= 1166  && num <= 1188)  return "Л4";
-            if (num >= 1189  && num <= 11108) return "Л5";
-            if ((num >= 11109 && num <= 11123) || (num >= 1201 && num <= 1206)) return "Л6";
-            if (num >= 1207  && num <= 1226)  return "Л7";
-            if (num >= 1227  && num <= 1249)  return "Л8";
-            if ((num >= 1251 && num <= 1255)  || (num >= 1301 && num <= 1316)) return "Л9";
-            if (num >= 1317  && num <= 1337)  return "Л10";
-            if (num >= 1338  && num <= 1353)  return "Л11";
-            return "Ostali";
-        } catch (Exception e) {
-            return "Nepoznat format";
-        }
     }
 }

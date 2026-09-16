@@ -3,6 +3,7 @@ package com.qrattendance.backend.controller;
 import com.qrattendance.backend.model.Session;
 import com.qrattendance.backend.model.Subject;
 import com.qrattendance.backend.model.QrToken;
+import com.qrattendance.backend.security.AccessControlService;
 import com.qrattendance.backend.service.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,15 +23,14 @@ public class SessionController {
     private final SubjectService subjectService;
     private final QrTokenService qrTokenService;
     private final QrSchedulerService qrSchedulerService;
+    private final AccessControlService accessControlService;
 
     @GetMapping("/subject/{subjectId}")
     public ResponseEntity<List<Session>> getSessionsForSubject(
             @PathVariable String subjectId,
             @AuthenticationPrincipal Jwt jwt) {
 
-        Subject subject = subjectService.findById(subjectId)
-                .orElseThrow(() -> new RuntimeException("Predmet nije pronađen"));
-
+        Subject subject = accessControlService.requireOwnedSubject(subjectId, jwt);
         return ResponseEntity.ok(sessionService.getSessionsForSubject(subject));
     }
 
@@ -38,13 +38,12 @@ public class SessionController {
     public ResponseEntity<Session> createSession(
             @RequestBody Session session,
             @AuthenticationPrincipal Jwt jwt) {
-        
+
         if (session.getSubject() == null || session.getSubject().getId() == null) {
-             return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().build();
         }
-        
-        Subject subject = subjectService.findById(session.getSubject().getId())
-                .orElseThrow(() -> new RuntimeException("Predmet nije pronađen"));
+
+        Subject subject = accessControlService.requireOwnedSubject(session.getSubject().getId(), jwt);
         session.setSubject(subject);
 
         return ResponseEntity.ok(sessionService.createSession(session));
@@ -55,8 +54,7 @@ public class SessionController {
             @PathVariable String sessionId,
             @AuthenticationPrincipal Jwt jwt) {
 
-        Session session = sessionService.findById(sessionId)
-                .orElseThrow(() -> new RuntimeException("Sesija nije pronađena"));
+        Session session = accessControlService.requireOwnedSession(sessionId, jwt);
 
         if (session.getStatus() == Session.SessionStatus.ACTIVE) {
             return ResponseEntity.badRequest()
@@ -73,8 +71,7 @@ public class SessionController {
             @PathVariable String sessionId,
             @AuthenticationPrincipal Jwt jwt) {
 
-        Session session = sessionService.findById(sessionId)
-                .orElseThrow(() -> new RuntimeException("Sesija nije pronađena"));
+        Session session = accessControlService.requireOwnedSession(sessionId, jwt);
 
         Session activated = sessionService.activateSession(session);
         QrToken token = qrTokenService.generateToken(sessionId);
@@ -92,8 +89,7 @@ public class SessionController {
             @PathVariable String sessionId,
             @AuthenticationPrincipal Jwt jwt) {
 
-        Session session = sessionService.findById(sessionId)
-                .orElseThrow(() -> new RuntimeException("Sesija nije pronađena"));
+        Session session = accessControlService.requireOwnedSession(sessionId, jwt);
 
         qrSchedulerService.unregisterSession(sessionId);
         return ResponseEntity.ok(sessionService.closeSession(session));
@@ -104,8 +100,7 @@ public class SessionController {
             @PathVariable String sessionId,
             @AuthenticationPrincipal Jwt jwt) {
 
-        Session session = sessionService.findById(sessionId)
-                .orElseThrow(() -> new RuntimeException("Sesija nije pronađena"));
+        Session session = accessControlService.requireOwnedSession(sessionId, jwt);
 
         if (!sessionService.isActive(session)) {
             return ResponseEntity.badRequest().body(Map.of("error", "Sesija nije aktivna"));
@@ -120,7 +115,7 @@ public class SessionController {
         return ResponseEntity.ok(Map.of(
                 "token", currentToken,
                 "sessionId", sessionId,
-                "expiresIn", qrTokenService.getRefreshIntervalSeconds() 
+                "expiresIn", qrTokenService.getRefreshIntervalSeconds()
         ));
     }
 }

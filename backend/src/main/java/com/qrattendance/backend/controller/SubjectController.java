@@ -2,6 +2,7 @@ package com.qrattendance.backend.controller;
 
 import com.qrattendance.backend.model.Subject;
 import com.qrattendance.backend.model.User;
+import com.qrattendance.backend.security.AccessControlService;
 import com.qrattendance.backend.service.SubjectService;
 import com.qrattendance.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ public class SubjectController {
 
     private final SubjectService subjectService;
     private final UserService userService;
+    private final AccessControlService accessControlService;
 
     @GetMapping
     public ResponseEntity<List<Subject>> getSubjects(@AuthenticationPrincipal Jwt jwt) {
@@ -39,6 +41,7 @@ public class SubjectController {
     public ResponseEntity<?> deleteSubject(
             @PathVariable String id,
             @AuthenticationPrincipal Jwt jwt) {
+        accessControlService.requireOwnedSubject(id, jwt);
         subjectService.delete(id);
         return ResponseEntity.ok().build();
     }

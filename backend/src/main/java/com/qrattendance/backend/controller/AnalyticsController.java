@@ -2,10 +2,13 @@ package com.qrattendance.backend.controller;
 
 import com.qrattendance.backend.model.*;
 import com.qrattendance.backend.repository.SubjectRepository;
+import com.qrattendance.backend.security.AccessControlService;
 import com.qrattendance.backend.service.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -19,14 +22,17 @@ public class AnalyticsController {
     private final AnalyticsService analyticsService;
     private final SubjectService subjectService;
     private final SubjectRepository subjectRepository;
+    private final AccessControlService accessControlService;
 
     @Value("${app.attendance.threshold:70.0}")
     private double defaultThreshold;
 
     @GetMapping("/subject/{subjectId}")
-    public ResponseEntity<?> getSubjectAnalytics(@PathVariable String subjectId) {
-        Subject subject = subjectService.findById(subjectId)
-                .orElseThrow(() -> new RuntimeException("Predmet nije pronađen"));
+    public ResponseEntity<?> getSubjectAnalytics(
+            @PathVariable String subjectId,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        Subject subject = accessControlService.requireOwnedSubject(subjectId, jwt);
 
         var dto = analyticsService.getSubjectAnalytics(subjectId, defaultThreshold);
 
@@ -65,15 +71,23 @@ public class AnalyticsController {
             return point;
         }).collect(Collectors.toList()));
 
-        List<Subject> allGroups = subjectRepository.findByCode(subject.getCode());
-        Map<String, Double> groupStats = new HashMap<>();
-        for (Subject s : allGroups) {
-            var sDto = analyticsService.getSubjectAnalytics(s.getId(), defaultThreshold);
-            double average = sDto.getStudentStats().stream()
-                    .mapToDouble(stat -> stat.getPercentage())
-                    .average()
-                    .orElse(0.0);
-            groupStats.put(s.getGroupName() != null ? s.getGroupName() : "G-Nepoznato", average);
+        Map<String, Double> groupStats;
+        if (subject.getStudyYear() != null && subject.getStudyYear() == 1) {
+            groupStats = dto.getGroupStats();
+        } else {
+            List<Subject> allGroups = subjectRepository.findByCode(subject.getCode()).stream()
+                    .filter(s -> s.getCreatedBy() != null
+                            && s.getCreatedBy().getId().equals(subject.getCreatedBy().getId()))
+                    .toList();
+            groupStats = new HashMap<>();
+            for (Subject s : allGroups) {
+                var sDto = analyticsService.getSubjectAnalytics(s.getId(), defaultThreshold);
+                double average = sDto.getStudentStats().stream()
+                        .mapToDouble(stat -> stat.getPercentage())
+                        .average()
+                        .orElse(0.0);
+                groupStats.put(s.getGroupName() != null ? s.getGroupName() : "G-Nepoznato", average);
+            }
         }
         response.put("groupStats", groupStats);
 
