@@ -1,10 +1,18 @@
 .env
+.env.local
+*.pat
 
 # Backend
 backend/target/
 backend/.mvn/
 backend/*.iml
 backend/.idea/
+
+# Config Server
+config-server/target/
+config-server/.mvn/
+config-server/*.iml
+config-server/.idea/
 
 # Frontend
 frontend/node_modules/

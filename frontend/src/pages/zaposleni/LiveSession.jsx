@@ -38,7 +38,7 @@ function LiveSession() {
 
   const connectWebSocket = () => {
     const client = new Client({
-      webSocketFactory: () => new SockJS(`${import.meta.env.VITE_API_URL || 'http://localhost:8081'}/ws`),
+      webSocketFactory: () => new SockJS('/ws'),
       reconnectDelay: 5000,
       onConnect: () => {
         client.subscribe(`/topic/session/${sessionId}`, (message) => {
@@ -297,7 +297,7 @@ function LiveSession() {
                     <p className="font-mono text-sm font-bold text-red-800">{selectedStudent.ipAddress || '192.168.1.1'}</p>
                   </div>
                   <div>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase">Korišteni preglednik</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase">Korišteni pregledač</p>
                     <p className="text-[11px] text-gray-700 leading-tight italic font-medium">{selectedStudent.userAgent}</p>
                   </div>
                 </div>
