@@ -38,10 +38,14 @@ public class SessionService {
         return sessionRepository.findBySubjectOrderByCreatedAtDesc(subject);
     }   
 
-    @Transactional
+        @Transactional
     public Session activateSession(Session session) {
+        if (session.getStatus() == Session.SessionStatus.CLOSED) {
+            throw new IllegalStateException("Zatvorena sesija se ne može ponovo aktivirati.");
+        }
+
         List<Session> activeOnes = sessionRepository.findBySubjectAndStatus(session.getSubject(), Session.SessionStatus.ACTIVE);
-        
+
         if (!activeOnes.isEmpty() && !activeOnes.get(0).getId().equals(session.getId())) {
             throw new IllegalStateException("Već postoji aktivna sesija za ovaj predmet.");
         }

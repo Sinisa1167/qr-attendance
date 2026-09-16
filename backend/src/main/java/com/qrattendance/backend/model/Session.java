@@ -45,7 +45,7 @@ public class Session {
     @Column(nullable = false)
     private LocalTime endTime;
 
-    private Integer groupNumber;
+    private String groupNumber;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

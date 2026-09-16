@@ -7,6 +7,8 @@ import com.qrattendance.backend.repository.AttendanceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
@@ -31,13 +33,14 @@ public class AttendanceService {
         return attendanceRepository.existsBySessionAndStudent(session, student);
     }
 
+        @Transactional
     public Attendance checkIn(Session session, User student, String ipAddress, String userAgent, String tokenUsed) {
-        if (hasStudentCheckedIn(session, student)) {
-            throw new IllegalStateException("Student je već evidentiran u ovoj sesiji");
-        }
-
         if (session.getStatus() != Session.SessionStatus.ACTIVE) {
             throw new IllegalStateException("Sesija nije aktivna");
+        }
+
+        if (hasStudentCheckedIn(session, student)) {
+            throw new IllegalStateException("Student je već evidentiran u ovoj sesiji");
         }
 
         Attendance attendance = new Attendance();
@@ -47,7 +50,12 @@ public class AttendanceService {
         attendance.setUserAgent(userAgent);
         attendance.setTokenUsed(tokenUsed);
 
-        Attendance saved = attendanceRepository.save(attendance);
+        Attendance saved;
+        try {
+            saved = attendanceRepository.saveAndFlush(attendance);
+        } catch (DataIntegrityViolationException e) {
+            throw new IllegalStateException("Student je već evidentiran u ovoj sesiji");
+        }
 
         messagingTemplate.convertAndSend(
             "/topic/session/" + session.getId(),

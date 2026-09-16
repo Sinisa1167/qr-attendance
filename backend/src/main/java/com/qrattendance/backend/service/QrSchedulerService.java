@@ -7,6 +7,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import java.time.LocalDateTime;
 
 import java.util.List;
 import java.util.Set;
@@ -42,6 +43,20 @@ public class QrSchedulerService {
                 qrTokenService.generateToken(sessionId);
             } catch (Exception e) {
                 activeSessions.remove(sessionId);
+            }
+        }
+    }
+
+    @Scheduled(fixedRate = 60000)
+    public void autoCloseExpiredSessions() {
+        LocalDateTime now = LocalDateTime.now();
+        for (Session s : sessionRepository.findByStatus(Session.SessionStatus.ACTIVE)) {
+            if (s.getDate() == null || s.getEndTime() == null) continue;
+            if (s.getDate().atTime(s.getEndTime()).isBefore(now)) {
+                s.setStatus(Session.SessionStatus.CLOSED);
+                s.setClosedAt(now);
+                sessionRepository.save(s);
+                unregisterSession(s.getId());
             }
         }
     }

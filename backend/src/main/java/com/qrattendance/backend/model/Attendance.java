@@ -9,7 +9,13 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "attendance")
+@Table(
+    name = "attendance",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uk_attendance_session_student",
+        columnNames = {"session_id", "student_id"}
+    )
+)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -42,6 +48,8 @@ public class Attendance {
 
     @PrePersist
     protected void onCreate() {
-        checkInTime = LocalDateTime.now();
+        if (checkInTime == null) {
+            checkInTime = LocalDateTime.now();
+        }
     }
 }
