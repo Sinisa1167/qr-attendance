@@ -55,11 +55,12 @@ public class Subject {
     @OneToMany(mappedBy = "subject", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Session> sessions = new ArrayList<>(); // Inicijalizacija
 
+    @JsonIgnore
     @ManyToMany
     @JoinTable(
         name = "subject_students",
         joinColumns = @JoinColumn(name = "subject_id"),
         inverseJoinColumns = @JoinColumn(name = "student_id")
     )
-    private List<User> students = new ArrayList<>(); // Inicijalizacija
+    private List<User> students = new ArrayList<>();
 }
