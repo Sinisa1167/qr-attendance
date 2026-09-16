@@ -1,0 +1,103 @@
+{
+  "realm": "qr-attendance",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 1800,
+  "roles": {
+    "realm": [
+      { "name": "ZAPOSLENI" },
+      { "name": "STUDENT" },
+      {
+        "name": "default-roles-qr-attendance",
+        "composite": true,
+        "composites": {
+          "realm": ["STUDENT"]
+        }
+      }
+    ]
+  },
+  "defaultRole": {
+    "name": "default-roles-qr-attendance",
+    "composite": true,
+    "clientRole": false,
+    "containerId": "qr-attendance"
+  },
+  "clients": [
+    {
+      "clientId": "qr-attendance-app",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["*"],
+      "webOrigins": ["*"],
+      "attributes": { "post.logout.redirect.uris": "+" }
+    }
+  ],
+  "users": [
+    {
+      "username": "profesor@etf.unibl.org",
+      "email": "profesor@etf.unibl.org",
+      "firstName": "Petar",
+      "lastName": "Petrović",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "prof123", "temporary": false }],
+      "realmRoles": ["ZAPOSLENI"]
+    },
+    {
+      "username": "sinisa.sarkanovic@student.etf.unibl.org",
+      "email": "sinisa.sarkanovic@student.etf.unibl.org",
+      "firstName": "Siniša",
+      "lastName": "Šarkanović",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "student123", "temporary": false }],
+      "realmRoles": ["STUDENT"]
+    },
+    {
+      "username": "filip.jankovic@student.etf.unibl.org",
+      "email": "filip.jankovic@student.etf.unibl.org",
+      "firstName": "Filip",
+      "lastName": "Janković",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "student123", "temporary": false }],
+      "realmRoles": ["STUDENT"]
+    },
+    {
+      "username": "nevena.jovanovic@student.etf.unibl.org",
+      "email": "nevena.jovanovic@student.etf.unibl.org",
+      "firstName": "Nevena",
+      "lastName": "Jovanović",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "student123", "temporary": false }],
+      "realmRoles": ["STUDENT"]
+    },
+    {
+      "username": "jelena.maletic@student.etf.unibl.org",
+      "email": "jelena.maletic@student.etf.unibl.org",
+      "firstName": "Jelena",
+      "lastName": "Maletić",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "student123", "temporary": false }],
+      "realmRoles": ["STUDENT"]
+    },
+    {
+      "username": "danilo.todorovic@student.etf.unibl.org",
+      "email": "danilo.todorovic@student.etf.unibl.org",
+      "firstName": "Danilo",
+      "lastName": "Todorović",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "student123", "temporary": false }],
+      "realmRoles": ["STUDENT"]
+    }
+  ]
+}
