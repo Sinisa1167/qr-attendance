@@ -275,8 +275,17 @@ function Analytics() {
                   Iznad ({aboveCount})
                 </button>
               </div>
-              <button onClick={toggleSort} className="bg-gray-50 px-4 py-2 rounded-xl text-sm font-bold text-gray-600 border border-gray-100 hover:bg-gray-100 transition-all">
-                Sortiraj ↕
+              <button
+                onClick={toggleSort}
+                className={`px-2 py-1 rounded-lg text-sm font-bold border transition-all flex items-center gap-2
+                  ${
+                    sortDirection === 'desc'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow'
+                      : 'bg-amber-500 text-white border-amber-500 shadow'
+                  }
+                `}
+              >
+                {sortDirection === 'desc' ? 'Opadajuće ↓' : 'Rastuće ↑'}
               </button>
             </div>
           </div>
