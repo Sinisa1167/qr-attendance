@@ -4,26 +4,18 @@ server:
 spring:
   application:
     name: config-server
+  profiles:
+    active: native
   cloud:
     config:
       server:
-        git:
-          uri: https://github.com/Sinisa1167/qr-attendance-config-repo.git
-          search-paths:
-            - backend
-          username: ${GIT_USERNAME}
-          password: ${GIT_PASSWORD}
-          default-label: main
-          clone-on-start: true
+        native:
+          search-locations: classpath:/config
 
 eureka:
-  instance:
-    hostname: config-server
   client:
     register-with-eureka: false
     fetch-registry: false
-    service-url:
-      defaultZone: http://config-server:8888/eureka
 
 management:
   endpoints:

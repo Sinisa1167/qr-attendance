@@ -1,0 +1,104 @@
+server:
+  port: 8081
+  forward-headers-strategy: framework
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:5432/${POSTGRES_DB:qrattendance}
+    username: ${POSTGRES_USER:qruser}
+    password: ${POSTGRES_PASSWORD:qrpassword123}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+          jwk-set-uri: http://keycloak:8080/realms/qr-attendance/protocol/openid-connect/certs
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: 6379
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://config-server:8888/eureka
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  qr-secret: ${QR_SECRET}
+  qr-refresh-interval: ${QR_REFRESH_INTERVAL}
+  attendance:
+    threshold: ${ATTENDANCE_THRESHOLD}
+  student-email-domain: ${STUDENT_EMAIL_DOMAIN}
+  employee-email-domain: ${EMPLOYEE_EMAIL_DOMAIN}
+  group-rules:
+    auditorne:
+      - name: "Г1"
+        ranges:
+          - { from: 1101, to: 1159 }
+      - name: "Г2"
+        ranges:
+          - { from: 1160,  to: 1199  }
+          - { from: 11100, to: 11117 }
+      - name: "Г3"
+        ranges:
+          - { from: 11118, to: 11124 }
+          - { from: 1201,  to: 1252  }
+      - name: "Г4"
+        ranges:
+          - { from: 1253, to: 1259 }
+          - { from: 1301, to: 1353 }
+    laboratorijske:
+      - name: "Л1"
+        ranges:
+          - { from: 1101, to: 1121 }
+      - name: "Л2"
+        ranges:
+          - { from: 1122, to: 1144 }
+      - name: "Л3"
+        ranges:
+          - { from: 1145, to: 1165 }
+      - name: "Л4"
+        ranges:
+          - { from: 1166, to: 1188 }
+      - name: "Л5"
+        ranges:
+          - { from: 1189,  to: 1199  }
+          - { from: 11100, to: 11108 }
+      - name: "Л6"
+        ranges:
+          - { from: 11109, to: 11124 }
+          - { from: 1201,  to: 1206  }
+      - name: "Л7"
+        ranges:
+          - { from: 1207, to: 1226 }
+      - name: "Л8"
+        ranges:
+          - { from: 1227, to: 1249 }
+      - name: "Л9"
+        ranges:
+          - { from: 1251, to: 1259 }
+          - { from: 1301, to: 1316 }
+      - name: "Л10"
+        ranges:
+          - { from: 1317, to: 1337 }
+      - name: "Л11"
+        ranges:
+          - { from: 1338, to: 1353 }

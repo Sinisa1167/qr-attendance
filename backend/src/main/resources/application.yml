@@ -3,15 +3,9 @@ spring:
     name: backend
   config:
     import: "configserver:http://config-server:8888"
-
-eureka:
-  client:
-    service-url:
-      defaultZone: http://config-server:8888/eureka
-    register-with-eureka: true
-    fetch-registry: true
-  instance:
-    prefer-ip-address: true
-
-app:
-  employee-email-domain: ${EMPLOYEE_EMAIL_DOMAIN}
+  cloud:
+    config:
+      fail-fast: true
+      retry:
+        max-attempts: 10
+        initial-interval: 3000

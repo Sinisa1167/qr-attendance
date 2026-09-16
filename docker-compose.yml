@@ -2,19 +2,17 @@ services:
   config-server:
     build: ./config-server
     container_name: qr-config-server
+    restart: unless-stopped
     ports:
       - "8888:8888"
     environment:
-      GIT_USERNAME: ${GIT_USERNAME}
-      GIT_PASSWORD: ${GIT_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
-      KEYCLOAK_URL: http://keycloak:8080
-      KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      KEYCLOAK_ISSUER_URI: http://${HOST_IP}:8080/realms/${KEYCLOAK_REALM}
       QR_REFRESH_INTERVAL: ${QR_REFRESH_INTERVAL}
       QR_SECRET: ${QR_SECRET}
       ATTENDANCE_THRESHOLD: ${ATTENDANCE_THRESHOLD}
@@ -32,6 +30,7 @@ services:
   backend:
     build: ./backend
     container_name: qr-backend
+    restart: unless-stopped
     depends_on:
       config-server:
         condition: service_healthy
@@ -39,6 +38,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      keycloak:
+        condition: service_started
     ports:
       - "8081:8081"
     environment:
@@ -49,7 +50,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       REDIS_HOST: redis
       KEYCLOAK_REALM: ${KEYCLOAK_REALM}
-      KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI}
+      KEYCLOAK_ISSUER_URI: http://${HOST_IP}:8080/realms/${KEYCLOAK_REALM}
       QR_REFRESH_INTERVAL: ${QR_REFRESH_INTERVAL}
       QR_SECRET: ${QR_SECRET}
       ATTENDANCE_THRESHOLD: ${ATTENDANCE_THRESHOLD}
@@ -57,10 +58,32 @@ services:
       EMPLOYEE_EMAIL_DOMAIN: ${EMPLOYEE_EMAIL_DOMAIN}
     networks:
       - qr-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8081/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  frontend:
+    build: ./frontend
+    container_name: qr-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+    environment:
+      KEYCLOAK_URL: http://${HOST_IP}:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+    networks:
+      - qr-network
 
   postgres:
     image: postgres:16
     container_name: qr-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -73,7 +96,7 @@ services:
     networks:
       - qr-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -81,6 +104,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: qr-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     networks:
@@ -94,6 +118,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.2
     container_name: qr-keycloak
+    restart: unless-stopped
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
@@ -101,9 +126,14 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB}
       KC_DB_USERNAME: ${POSTGRES_USER}
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
-    command: start-dev
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+    command: ["start-dev", "--import-realm"]
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     ports:
-      - "8080:8080"
+      - "0.0.0.0:8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
