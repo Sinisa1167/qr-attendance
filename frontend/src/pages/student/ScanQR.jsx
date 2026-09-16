@@ -3,11 +3,24 @@ import { Html5QrcodeScanner } from 'html5-qrcode'
 import api from '../../api/axiosInstance'
 
 function ScanQR() {
+  const [online, setOnline] = useState(navigator.onLine)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [scanned, setScanned] = useState(false)
+  const [lastCheckedToken, setLastCheckedToken] = useState(null)
   const scannerRef = useRef(null)
+
+useEffect(() => {
+    const on = () => setOnline(true)
+    const off = () => setOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [])
 
   useEffect(() => {
     // Funkcija za pokretanje skenera
@@ -59,17 +72,43 @@ function ScanQR() {
     // Većina grešaka su samo "kod nije pronađen u ovom frejmu", ignorišemo
   }
 
-  const checkIn = async (token) => {
+    const checkIn = async (token) => {
     setLoading(true)
     setError(null)
+
+    if (token === lastCheckedToken) {
+      setError('Već ste evidentirani na ovoj sesiji.')
+      setScanned(false)
+      setLoading(false)
+      return
+    }
+
+    if (!navigator.onLine) {
+      setError('Nema internet konekcije. Provjerite mrežu i skenirajte ponovo.')
+      setScanned(false)
+      setLoading(false)
+      return
+    }
+
     try {
       const res = await api.post('/api/student/attendance/checkin', { token })
       setResult(res.data)
+      setLastCheckedToken(token)
     } catch (err) {
-      const msg = err.response?.data?.error || 'Greška pri evidentiranju prisustva'
+      let msg
+      if (err.code === 'ERR_NETWORK' || !err.response) {
+        msg = 'Server je nedostupan ili je veza prekinuta. Prisustvo NIJE evidentirano — pokušajte ponovo.'
+      } else if (err.response.status === 429) {
+        msg = 'Previše pokušaja. Sačekajte trenutak.'
+      } else if (err.response.status === 409) {
+        msg = err.response.data?.error || 'Već ste evidentirani na ovoj sesiji.'
+      } else if (err.response.status === 503) {
+        msg = 'Sistem je privremeno nedostupan. Pokušajte ponovo za nekoliko sekundi.'
+      } else {
+        msg = err.response.data?.error || 'Greška pri evidentiranju prisustva'
+      }
       setError(msg)
-      // Dozvoli ponovno skeniranje ako je greška (npr. istekao kod)
-      setScanned(false) 
+      setScanned(false)
     } finally {
       setLoading(false)
     }
@@ -98,6 +137,12 @@ function ScanQR() {
         <h2 className="text-3xl font-black text-gray-900">Scan QR</h2>
         <p className="text-gray-500 mt-2 font-medium">Evidencija prisustva na nastavi</p>
       </div>
+
+      {!online && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4 text-center">
+          <p className="text-amber-700 text-sm font-bold">Nema mrežne konekcije</p>
+        </div>
+      )}
 
       {/* Skener panel */}
       {!result && !loading && (
