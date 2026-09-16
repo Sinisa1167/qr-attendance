@@ -43,10 +43,10 @@ public class UploadController {
                 "subject", subject
             ));
         } catch (IllegalArgumentException e) {
-    return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-} catch (Exception e) {
-    return ResponseEntity.internalServerError()
-        .body(Map.of("error", "Greška pri parsiranju fajla: " + e.getMessage()));
-}
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                .body(Map.of("error", "Greška pri parsiranju fajla: " + e.getMessage()));
+        }
     }
 }

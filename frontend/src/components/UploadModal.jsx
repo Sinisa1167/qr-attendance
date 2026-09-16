@@ -29,7 +29,7 @@ function UploadModal({ onClose, onSuccess }) {
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
       setCurrentFileIndex(i + 1)
-      
+
       const formData = new FormData()
       formData.append('file', file)
 
@@ -42,7 +42,7 @@ function UploadModal({ onClose, onSuccess }) {
         const msg = err.response?.data?.error || `Greška kod fajla: ${file.name}`
         setError(msg)
         setLoading(false)
-        return // Prekida upload ako jedan fajl ne prođe (sigurnija varijanta)
+        return
       }
     }
 
@@ -53,14 +53,11 @@ function UploadModal({ onClose, onSuccess }) {
     }
   }
 
-  // Drag & Drop logika
   const handleDragOver = (e) => {
     e.preventDefault()
     setIsDragging(true)
   }
-
   const handleDragLeave = () => setIsDragging(false)
-
   const handleDrop = (e) => {
     e.preventDefault()
     setIsDragging(false)
@@ -73,8 +70,8 @@ function UploadModal({ onClose, onSuccess }) {
   return (
     <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-        
-        {/* HEADER MODALA */}
+
+        {/* HEADER */}
         <div className="bg-blue-600 p-6 text-white text-center">
           <div className="text-4xl mb-2">📥</div>
           <h3 className="text-xl font-bold italic tracking-tight">Import Studenata</h3>
@@ -82,8 +79,8 @@ function UploadModal({ onClose, onSuccess }) {
         </div>
 
         <div className="p-6">
-          {/* ZONA ZA ODABIR ILI DRAG & DROP */}
-          <div 
+          {/* DROP ZONA */}
+          <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -106,25 +103,26 @@ function UploadModal({ onClose, onSuccess }) {
 
             {files.length > 0 ? (
               <div className="space-y-2">
-                {/* LISTA ODABRANIH FAJLOVA SA TITLE ATRIBUTOM */}
                 <div className="max-h-40 overflow-y-auto px-1 space-y-1 custom-scrollbar">
                   {files.map((f, i) => (
-                    <div 
-                      key={i} 
-                      title={f.name} // <--- PRIKAZ PUNOG NAZIVA NA HOVER MIŠA
-                      className="flex items-center gap-3 text-xs text-blue-700 bg-blue-50/50 px-3 py-2 rounded-xl border border-blue-100/50 hover:bg-blue-100 transition-colors group"
+                    <div
+                      key={i}
+                      title={f.name}
+                      className="flex items-center gap-3 text-xs text-blue-700 bg-blue-50/50 px-3 py-2 rounded-xl border border-blue-100/50 hover:bg-blue-100 transition-colors"
                     >
                       <span className="shrink-0 text-blue-400">📄</span>
-                      <span className="truncate font-mono font-medium flex-1 text-left">
-                        {f.name}
-                      </span>
+                      <span className="truncate font-mono font-medium flex-1 text-left">{f.name}</span>
                       <span className="shrink-0 text-[10px] text-blue-300 font-bold uppercase">
                         {(f.size / 1024).toFixed(0)} KB
                       </span>
                     </div>
                   ))}
                 </div>
-                {!loading && <p className="text-[10px] text-gray-400 font-bold uppercase mt-3 tracking-widest">Kliknite za promjenu liste</p>}
+                {!loading && (
+                  <p className="text-[10px] text-gray-400 font-bold uppercase mt-3 tracking-widest">
+                    Kliknite za promjenu liste
+                  </p>
+                )}
               </div>
             ) : (
               <div className="py-4">
@@ -134,7 +132,7 @@ function UploadModal({ onClose, onSuccess }) {
             )}
           </div>
 
-          {/* PROGRESS BAR (Vidi se samo dok traje upload) */}
+          {/* PROGRESS BAR */}
           {loading && (
             <div className="mt-6 animate-in fade-in duration-500">
               <div className="flex justify-between text-[10px] font-black text-blue-600 mb-1.5 uppercase tracking-widest">
@@ -142,15 +140,15 @@ function UploadModal({ onClose, onSuccess }) {
                 <span>{currentFileIndex} / {files.length}</span>
               </div>
               <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden shadow-inner">
-                <div 
-                  className="bg-blue-600 h-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(37,99,235,0.4)]" 
+                <div
+                  className="bg-blue-600 h-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(37,99,235,0.4)]"
                   style={{ width: `${(currentFileIndex / files.length) * 100}%` }}
-                ></div>
+                />
               </div>
             </div>
           )}
 
-          {/* ERROR PORUKA */}
+          {/* ERROR */}
           {error && (
             <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-xl flex gap-3 items-start animate-shake">
               <span className="text-red-500">⚠️</span>
@@ -158,7 +156,7 @@ function UploadModal({ onClose, onSuccess }) {
             </div>
           )}
 
-          {/* AKCIJE (Dugmad) */}
+          {/* AKCIJE */}
           <div className="flex gap-3 mt-8">
             <button
               onClick={onClose}
