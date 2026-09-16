@@ -1,5 +1,6 @@
 package com.qrattendance.backend.service;
 
+import com.qrattendance.backend.config.GroupRulesConfig;
 import com.qrattendance.backend.model.Subject;
 import com.qrattendance.backend.model.User;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class ExcelParserService {
 
     private final UserService userService;
     private final SubjectService subjectService;
+    private final GroupRulesConfig groupRulesConfig;
 
     @Value("${app.student-email-domain}")
     private String studentEmailDomain;
@@ -33,6 +35,7 @@ public class ExcelParserService {
         return parseAndSaveXlsx(file, createdBy);
     }
 
+    // XLSX parser
     @Transactional
     public Subject parseAndSaveXlsx(MultipartFile file, User createdBy) throws IOException {
         try (Workbook workbook = new XSSFWorkbook(file.getInputStream())) {
@@ -48,83 +51,28 @@ public class ExcelParserService {
                 throw new IllegalArgumentException("Neispravan Excel format – nema reda sa metapodacima (red 5).");
             }
 
-            String name = getCell(metaRow, 7, formatter);
-            String code = getCell(metaRow, 9, formatter);
+            String name         = getCell(metaRow, 7, formatter);
+            String code         = getCell(metaRow, 9, formatter);
             String teachingType = getCell(metaRow, 19, formatter);
-            String groupName = getCell(metaRow, 21, formatter);
-
-            if (subjectService.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
-                    code, teachingType, groupName, academicYear)) {
-                throw new IllegalArgumentException(
-                        String.format("Predmet '%s' (Grupa: %s, Tip: %s) već postoji za akademsku godinu %s.",
-                        name, groupName, teachingType, academicYear));
-            }
-
-            Subject subject = new Subject();
-            subject.setName(name);
-            subject.setCode(code);
-            subject.setStudyProgram(getCell(metaRow, 11, formatter));
-            subject.setStudyType(getCell(metaRow, 13, formatter));
-            subject.setStudyYear(parseInt(getCell(metaRow, 15, formatter)));
-            subject.setSemester(parseInt(getCell(metaRow, 17, formatter)));
-            subject.setAcademicYear(academicYear);
-            subject.setTeachingType(teachingType);
-            subject.setGroupName(groupName);
-            subject.setCreatedBy(createdBy);
-
-            Subject savedSubject = subjectService.save(subject);
+            String groupName    = getCell(metaRow, 21, formatter);
+            int    studyYear    = parseInt(getCell(metaRow, 15, formatter));
 
             int startRow = findStudentStartRow(sheet, formatter);
-            List<User> students = new ArrayList<>();
-            int emptyRowCount = 0;
+            List<User> students = collectStudentsFromSheet(sheet, formatter, startRow);
 
-            for (int i = startRow; i <= sheet.getLastRowNum(); i++) {
-                Row row = sheet.getRow(i);
-                if (row == null) {
-                    emptyRowCount++;
-                    if (emptyRowCount > 3) break;
-                    continue;
-                }
-
-                String lastName = getCell(row, 1, formatter);
-                String firstName = getCell(row, 2, formatter);
-                String indexNumber = getCell(row, 3, formatter);
-                String studentStatus = getCell(row, 4, formatter);
-
-                if (indexNumber.isBlank()) {
-                    emptyRowCount++;
-                    if (emptyRowCount > 3) break;
-                    continue;
-                }
-
-                emptyRowCount = 0;
-
-                if (firstName.isBlank() || lastName.isBlank()) continue;
-
-                String email = generateEmail(firstName, lastName);
-
-                User student = userService.findByEmail(email)
-                        .map(existing -> {
-                            if (existing.getFirstName() == null || existing.getFirstName().isBlank()) {
-                                existing.setFirstName(firstName);
-                                existing.setLastName(lastName);
-                                existing.setIndexNumber(indexNumber);
-                                existing.setStudentStatus(studentStatus);
-                                return userService.save(existing);
-                            }
-                            return existing;
-                        })
-                        .orElseGet(() -> createNewStudent(firstName, lastName, email, indexNumber, studentStatus));
-                students.add(student);
-            }
-
-            Subject freshSubject = subjectService.findById(savedSubject.getId())
-                    .orElseThrow(() -> new RuntimeException("Predmet nije pronađen"));
-            freshSubject.getStudents().addAll(students);
-            return subjectService.save(freshSubject);
+            return saveSubjectOrSplit(
+                    name, code,
+                    getCell(metaRow, 11, formatter),
+                    getCell(metaRow, 13, formatter),
+                    studyYear,
+                    parseInt(getCell(metaRow, 17, formatter)),
+                    teachingType, groupName, academicYear,
+                    students, createdBy
+            );
         }
     }
 
+    // CSV parser
     @Transactional
     public Subject parseAndSaveCsv(MultipartFile file, User createdBy) throws IOException {
         try (var reader = new java.io.BufferedReader(
@@ -138,35 +86,15 @@ public class ExcelParserService {
 
             if (rows.size() < 5) throw new IllegalArgumentException("Neispravan CSV format.");
 
-            String titleText = rows.size() > 1 ? getcsv(rows.get(1), 0) : "";
+            String titleText    = rows.size() > 1 ? getcsv(rows.get(1), 0) : "";
             String academicYear = extractAcademicYear(titleText);
 
-            String[] metaRow = rows.get(4);
-            String name = getcsv(metaRow, 7);
-            String code = getcsv(metaRow, 9);
+            String[] metaRow    = rows.get(4);
+            String name         = getcsv(metaRow, 7);
+            String code         = getcsv(metaRow, 9);
             String teachingType = getcsv(metaRow, 19);
-            String groupName = getcsv(metaRow, 21);
-
-            if (subjectService.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
-                    code, teachingType, groupName, academicYear)) {
-                throw new IllegalArgumentException(
-                        String.format("Predmet '%s' (Grupa: %s, Tip: %s) već postoji za akademsku godinu %s.",
-                        name, groupName, teachingType, academicYear));
-            }
-
-            Subject subject = new Subject();
-            subject.setName(name);
-            subject.setCode(code);
-            subject.setStudyProgram(getcsv(metaRow, 11));
-            subject.setStudyType(getcsv(metaRow, 13));
-            subject.setStudyYear(parseInt(getcsv(metaRow, 15)));
-            subject.setSemester(parseInt(getcsv(metaRow, 17)));
-            subject.setAcademicYear(academicYear);
-            subject.setTeachingType(teachingType);
-            subject.setGroupName(groupName);
-            subject.setCreatedBy(createdBy);
-
-            Subject savedSubject = subjectService.save(subject);
+            String groupName    = getcsv(metaRow, 21);
+            int    studyYear    = parseInt(getcsv(metaRow, 15));
 
             int startRow = 7;
             for (int i = 0; i < Math.min(20, rows.size()); i++) {
@@ -178,58 +106,243 @@ public class ExcelParserService {
                 }
             }
 
-            List<User> students = new ArrayList<>();
-            int emptyRowCount = 0;
+            List<User> students = collectStudentsFromCsv(rows, startRow);
 
-            for (int i = startRow; i < rows.size(); i++) {
-                String[] row = rows.get(i);
-                if (row.length < 4) {
-                    emptyRowCount++;
-                    if (emptyRowCount > 3) break;
-                    continue;
-                }
-
-                String lastName = getcsv(row, 1);
-                String firstName = getcsv(row, 2);
-                String indexNumber = getcsv(row, 3);
-                String studentStatus = row.length > 4 ? getcsv(row, 4) : "";
-
-                if (indexNumber.isBlank()) {
-                    emptyRowCount++;
-                    if (emptyRowCount > 3) break;
-                    continue;
-                }
-
-                emptyRowCount = 0;
-
-                if (firstName.isBlank() || lastName.isBlank()) continue;
-
-                String email = generateEmail(firstName, lastName);
-
-                User student = userService.findByEmail(email)
-                        .map(existing -> {
-                            if (existing.getFirstName() == null || existing.getFirstName().isBlank()) {
-                                existing.setFirstName(firstName);
-                                existing.setLastName(lastName);
-                                existing.setIndexNumber(indexNumber);
-                                existing.setStudentStatus(studentStatus);
-                                return userService.save(existing);
-                            }
-                            return existing;
-                        })
-                        .orElseGet(() -> createNewStudent(firstName, lastName, email, indexNumber, studentStatus));
-                students.add(student);
-            }
-
-            Subject freshSubject = subjectService.findById(savedSubject.getId())
-                    .orElseThrow(() -> new RuntimeException("Predmet nije pronađen"));
-            freshSubject.getStudents().addAll(students);
-            return subjectService.save(freshSubject);
+            return saveSubjectOrSplit(
+                    name, code,
+                    getcsv(metaRow, 11),
+                    getcsv(metaRow, 13),
+                    studyYear,
+                    parseInt(getcsv(metaRow, 17)),
+                    teachingType, groupName, academicYear,
+                    students, createdBy
+            );
         }
     }
 
-    // --- POMOĆNE METODE ---
+    // logika: jedan predmet ili auto-podjela po grupama
+    private Subject saveSubjectOrSplit(
+            String name, String code, String studyProgram, String studyType,
+            int studyYear, int semester,
+            String teachingType, String groupName, String academicYear,
+            List<User> students, User createdBy) {
 
+        boolean shouldSplit = studyYear == 1
+                && !isPredavanje(teachingType)
+                && hasGroupRules(teachingType);
+
+        if (!shouldSplit) {
+            return saveSingleSubject(name, code, studyProgram, studyType,
+                    studyYear, semester, teachingType, groupName, academicYear,
+                    students, createdBy);
+        }
+
+        // Auto-podjela po grupama iz konfiguracije
+        Map<String, List<User>> grouped = groupStudentsByIndex(students, teachingType);
+
+        Subject first = null;
+        for (Map.Entry<String, List<User>> entry : grouped.entrySet()) {
+            String grpName         = entry.getKey();
+            List<User> grpStudents = entry.getValue();
+            if (grpStudents.isEmpty()) continue;
+
+            if (subjectService.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
+                    code, teachingType, grpName, academicYear)) {
+                continue; // preskoči već postojeće grupe
+            }
+
+            Subject s = buildSubject(name, code, studyProgram, studyType,
+                    studyYear, semester, teachingType, grpName, academicYear, createdBy);
+            Subject saved = subjectService.save(s);
+            saved.getStudents().addAll(grpStudents);
+            saved = subjectService.save(saved);
+
+            if (first == null) first = saved;
+        }
+
+        if (first == null) {
+            throw new IllegalArgumentException(
+                    "Sve grupe za predmet '" + name + "' (" + teachingType
+                    + ") već postoje za " + academicYear + ".");
+        }
+        return first;
+    }
+
+    private Subject saveSingleSubject(
+            String name, String code, String studyProgram, String studyType,
+            int studyYear, int semester,
+            String teachingType, String groupName, String academicYear,
+            List<User> students, User createdBy) {
+
+        if (subjectService.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
+                code, teachingType, groupName, academicYear)) {
+            throw new IllegalArgumentException(
+                    String.format("Predmet '%s' (Grupa: %s, Tip: %s) već postoji za akademsku godinu %s.",
+                            name, groupName, teachingType, academicYear));
+        }
+
+        Subject subject = buildSubject(name, code, studyProgram, studyType,
+                studyYear, semester, teachingType, groupName, academicYear, createdBy);
+        Subject saved = subjectService.save(subject);
+        saved.getStudents().addAll(students);
+        return subjectService.save(saved);
+    }
+
+    private Subject buildSubject(
+            String name, String code, String studyProgram, String studyType,
+            int studyYear, int semester,
+            String teachingType, String groupName, String academicYear, User createdBy) {
+        Subject s = new Subject();
+        s.setName(name);
+        s.setCode(code);
+        s.setStudyProgram(studyProgram);
+        s.setStudyType(studyType);
+        s.setStudyYear(studyYear);
+        s.setSemester(semester);
+        s.setTeachingType(teachingType);
+        s.setGroupName(groupName);
+        s.setAcademicYear(academicYear);
+        s.setCreatedBy(createdBy);
+        return s;
+    }
+
+    private Map<String, List<User>> groupStudentsByIndex(List<User> students, String teachingType) {
+        List<GroupRulesConfig.GroupDef> rules = isLaboratorijske(teachingType)
+                ? groupRulesConfig.getLaboratorijske()
+                : groupRulesConfig.getAuditorne();
+
+        Map<String, List<User>> groups = new LinkedHashMap<>();
+        for (User student : students) {
+            String grpName = resolveGroupForIndex(student.getIndexNumber(), rules);
+            groups.computeIfAbsent(grpName, k -> new ArrayList<>()).add(student);
+        }
+        return groups;
+    }
+
+    public String resolveGroupForIndex(String index, List<GroupRulesConfig.GroupDef> rules) {
+        if (index == null || !index.contains("/")) return "Ostali";
+        try {
+            int num = Integer.parseInt(index.split("/")[0]);
+            return groupRulesConfig.resolveGroup(num, rules);
+        } catch (Exception e) {
+            return "Ostali";
+        }
+    }
+
+    public List<GroupRulesConfig.GroupDef> getAuditorneRules() {
+        return groupRulesConfig.getAuditorne();
+    }
+
+    public List<GroupRulesConfig.GroupDef> getLaboratorijskeRules() {
+        return groupRulesConfig.getLaboratorijske();
+    }
+
+    // Provjera konfiguracije i tipa nastave
+
+    private boolean hasGroupRules(String teachingType) {
+        if (isLaboratorijske(teachingType)) {
+            return groupRulesConfig.getLaboratorijske() != null
+                    && !groupRulesConfig.getLaboratorijske().isEmpty();
+        }
+        return groupRulesConfig.getAuditorne() != null
+                && !groupRulesConfig.getAuditorne().isEmpty();
+    }
+
+    private boolean isPredavanje(String teachingType) {
+        if (teachingType == null) return false;
+        String t = teachingType.toLowerCase().trim();
+        return t.contains("predavanj") || t.contains("предавањ");
+    }
+
+    public boolean isLaboratorijske(String teachingType) {
+        if (teachingType == null) return false;
+        String t = teachingType.toLowerCase().trim();
+        return t.contains("laborator") || t.contains("лаборатор");
+    }
+
+    // Prikupljanje studenata
+
+    private List<User> collectStudentsFromSheet(Sheet sheet, DataFormatter formatter, int startRow) {
+        List<User> students = new ArrayList<>();
+        int emptyRowCount = 0;
+
+        for (int i = startRow; i <= sheet.getLastRowNum(); i++) {
+            Row row = sheet.getRow(i);
+            if (row == null) {
+                if (++emptyRowCount > 3) break;
+                continue;
+            }
+            String lastName      = getCell(row, 1, formatter);
+            String firstName     = getCell(row, 2, formatter);
+            String indexNumber   = getCell(row, 3, formatter);
+            String studentStatus = getCell(row, 4, formatter);
+
+            if (indexNumber.isBlank()) {
+                if (++emptyRowCount > 3) break;
+                continue;
+            }
+            emptyRowCount = 0;
+            if (firstName.isBlank() || lastName.isBlank()) continue;
+
+            students.add(getOrCreateStudent(firstName, lastName, indexNumber, studentStatus));
+        }
+        return students;
+    }
+
+    private List<User> collectStudentsFromCsv(List<String[]> rows, int startRow) {
+        List<User> students = new ArrayList<>();
+        int emptyRowCount = 0;
+
+        for (int i = startRow; i < rows.size(); i++) {
+            String[] row = rows.get(i);
+            if (row.length < 4) {
+                if (++emptyRowCount > 3) break;
+                continue;
+            }
+            String lastName      = getcsv(row, 1);
+            String firstName     = getcsv(row, 2);
+            String indexNumber   = getcsv(row, 3);
+            String studentStatus = row.length > 4 ? getcsv(row, 4) : "";
+
+            if (indexNumber.isBlank()) {
+                if (++emptyRowCount > 3) break;
+                continue;
+            }
+            emptyRowCount = 0;
+            if (firstName.isBlank() || lastName.isBlank()) continue;
+
+            students.add(getOrCreateStudent(firstName, lastName, indexNumber, studentStatus));
+        }
+        return students;
+    }
+
+    private User getOrCreateStudent(String firstName, String lastName,
+                                     String indexNumber, String studentStatus) {
+        String email = generateEmail(firstName, lastName);
+        return userService.findByEmail(email)
+                .map(existing -> {
+                    if (existing.getFirstName() == null || existing.getFirstName().isBlank()) {
+                        existing.setFirstName(firstName);
+                        existing.setLastName(lastName);
+                        existing.setIndexNumber(indexNumber);
+                        existing.setStudentStatus(studentStatus);
+                        return userService.save(existing);
+                    }
+                    return existing;
+                })
+                .orElseGet(() -> {
+                    User newUser = new User();
+                    newUser.setEmail(email);
+                    newUser.setFirstName(firstName);
+                    newUser.setLastName(lastName);
+                    newUser.setRole(User.UserRole.STUDENT);
+                    newUser.setIndexNumber(indexNumber);
+                    newUser.setStudentStatus(studentStatus);
+                    return userService.save(newUser);
+                });
+    }
+
+    // Pomoćne metode
     private String getCell(Row row, int col, DataFormatter formatter) {
         if (row == null) return "";
         Cell cell = row.getCell(col);
@@ -263,21 +376,9 @@ public class ExcelParserService {
         return 7;
     }
 
-    private User createNewStudent(String firstName, String lastName,
-                                   String email, String indexNumber, String studentStatus) {
-        User newUser = new User();
-        newUser.setEmail(email);
-        newUser.setFirstName(firstName);
-        newUser.setLastName(lastName);
-        newUser.setRole(User.UserRole.STUDENT);
-        newUser.setIndexNumber(indexNumber);
-        newUser.setStudentStatus(studentStatus);
-        return userService.save(newUser);
-    }
-
     private String generateEmail(String firstName, String lastName) {
         String first = normalizeForEmail(firstName.split(" ")[0]);
-        String last = normalizeForEmail(lastName.split(" ")[0]);
+        String last  = normalizeForEmail(lastName.split(" ")[0]);
         return first + "." + last + "@" + studentEmailDomain;
     }
 
@@ -285,8 +386,7 @@ public class ExcelParserService {
         String latin = toLatin(input);
         String normalized = Normalizer.normalize(latin, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "");
-        return normalized.toLowerCase()
-                .replaceAll("[^a-z0-9]", "");
+        return normalized.toLowerCase().replaceAll("[^a-z0-9]", "");
     }
 
     private String extractAcademicYear(String title) {
@@ -299,7 +399,7 @@ public class ExcelParserService {
                 return year + "/" + String.format("%02d", nextYear);
             }
         } catch (Exception e) {
-            // ignorisi
+            // ignoriši
         }
         return "Nepoznato";
     }
