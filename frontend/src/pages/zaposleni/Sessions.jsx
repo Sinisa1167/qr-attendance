@@ -79,11 +79,24 @@ function Sessions() {
     }
   }
 
-  const createSession = async () => {
+    const createSession = async () => {
     if (!newSession.date || !newSession.startTime || !newSession.endTime) {
       alert("Molimo popunite sva polja")
       return
     }
+
+    const start = new Date(`${newSession.date}T${newSession.startTime}`)
+    const end = new Date(`${newSession.date}T${newSession.endTime}`)
+
+    if (start < new Date()) {
+      alert("Ne možete kreirati sesiju sa terminom u prošlosti")
+      return
+    }
+    if (end <= start) {
+      alert("Vrijeme završetka mora biti poslije vremena početka")
+      return
+    }
+
     try {
       const sessionData = {
         subject: { id: subjectId },
@@ -94,7 +107,7 @@ function Sessions() {
       setShowCreateForm(false)
       await fetchSessions()
     } catch (err) {
-      alert("Greška pri kreiranju sesije")
+      alert(err.response?.data?.error || "Greška pri kreiranju sesije")
     }
   }
 
@@ -256,6 +269,7 @@ function Sessions() {
               <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1 ml-1">Datum</label>
               <input
                 type="date"
+                min={new Date().toISOString().split('T')[0]}
                 value={newSession.date}
                 onChange={(e) => setNewSession({...newSession, date: e.target.value})}
                 className="w-full bg-white border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"

@@ -19,11 +19,18 @@ public class SessionService {
 
     @Transactional
     public Session createSession(Session session) {
-        if (session.getStatus() == null) {
-            session.setStatus(Session.SessionStatus.CREATED);
-        }
-        return sessionRepository.save(session);
+    LocalDateTime start = session.getDate().atTime(session.getStartTime());
+    LocalDateTime end = session.getDate().atTime(session.getEndTime());
+
+    if (start.isBefore(LocalDateTime.now())) {
+        throw new IllegalArgumentException("Ne možete kreirati sesiju sa terminom u prošlosti");
     }
+    if (!end.isAfter(start)) {
+        throw new IllegalArgumentException("Vrijeme završetka mora biti poslije vremena početka");
+    }
+
+    return sessionRepository.save(session);
+}
 
     @Transactional
     public void deleteSession(String id) {
@@ -55,8 +62,11 @@ public class SessionService {
         return sessionRepository.save(session);
     }
 
-    @Transactional
+        @Transactional
     public Session closeSession(Session session) {
+        if (session.getStatus() == Session.SessionStatus.CLOSED) {
+            throw new IllegalStateException("Sesija je već zatvorena.");
+        }
         session.setStatus(Session.SessionStatus.CLOSED);
         session.setClosedAt(LocalDateTime.now());
         return sessionRepository.save(session);

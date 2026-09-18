@@ -13,6 +13,7 @@ function LiveSession() {
   const [timeLeft, setTimeLeft] = useState(0)
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [qrFullscreen, setQrFullscreen] = useState(false)
+  const [sessionClosed, setSessionClosed] = useState(false)
 
   const countdownRef = useRef(null)
   const stompClientRef = useRef(null)
@@ -65,7 +66,12 @@ function LiveSession() {
       setTimeLeft(duration)
       startCountdown(duration)
     } catch (err) {
-      console.error("Greška pri preuzimanju tokena:", err)
+      if (err.response?.status === 400) {
+        setSessionClosed(true)
+        clearInterval(countdownRef.current)
+      } else {
+        console.error("Greška pri preuzimanju tokena:", err)
+      }
     }
   }
 
@@ -97,7 +103,13 @@ function LiveSession() {
       try {
         await api.post(`/api/admin/sessions/${sessionId}/close`)
         navigate(-1)
-      } catch (err) { console.error(err) }
+      } catch (err) {
+        if (err.response?.status === 409) {
+          navigate(-1)
+        } else {
+          console.error(err)
+        }
+      }
     }
   }
 
@@ -121,63 +133,78 @@ function LiveSession() {
             Sesija: <span className="font-mono text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-bold border border-blue-100">{sessionId}</span>
           </p>
         </div>
-        <button
-          onClick={closeSession}
-          className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-red-100 transition-all active:scale-95"
-        >
-          Završi i zatvori sesiju
-        </button>
+        {!sessionClosed && (
+          <button
+            onClick={closeSession}
+            className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-red-100 transition-all active:scale-95"
+          >
+            Završi i zatvori sesiju
+          </button>
+        )}
       </div>
+
+      {sessionClosed && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shrink-0 flex items-center justify-between">
+          <p className="text-amber-700 font-bold">Sesija je zatvorena (istekao je termin ili je zatvorena ranije). Prijave više nisu moguće.</p>
+          <button
+            onClick={() => navigate('/sessions')}
+            className="text-amber-700 font-bold underline hover:text-amber-900"
+          >
+            Nazad na listu sesija
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 min-h-0">
 
-        {/* QR kartica — klik bilo gdje otvara fullscreen */}
-        <div
-          onClick={() => setQrFullscreen(true)}
-          className="bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col min-h-0 overflow-hidden transition-all hover:shadow-md cursor-pointer group"
-        >
-          <div className="flex items-center justify-between px-6 pt-6 pb-2 shrink-0">
-            <h3 className="text-lg font-bold text-gray-800">Skenirajte za prisustvo</h3>
-            <div className="flex items-center gap-2 bg-gray-900 group-hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all shadow-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V6a2 2 0 012-2h2M4 16v2a2 2 0 002 2h2m8-16h2a2 2 0 012 2v2m0 8v2a2 2 0 01-2 2h-2" />
-              </svg>
-              Fullscreen
-            </div>
-          </div>
-
-          <div className="flex-1 flex items-center justify-center min-h-0 bg-white p-8">
-            <div className="w-full h-full max-h-[400px] aspect-square flex items-center justify-center transition-all duration-500">
-              {token ? (
-                <QRCodeSVG
-                  value={token}
-                  style={{ width: '100%', height: '100%' }}
-                  level="H"
-                  includeMargin={false}
-                />
-              ) : (
-                <div className="flex flex-col items-center text-gray-400">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-                  <p className="text-sm font-medium">Generisanje koda...</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="px-6 pb-6 shrink-0">
-            <div className="bg-blue-50 rounded-2xl px-6 py-4 flex items-center justify-between border border-blue-100/50">
-              <div>
-                <p className="text-blue-400 text-[10px] uppercase tracking-[0.2em] font-black">
-                  Sledeće osvježavanje
-                </p>
-                <p className="text-xs text-blue-300 font-medium">Automatska rotacija koda</p>
+        {!sessionClosed && (
+          <div
+            onClick={() => setQrFullscreen(true)}
+            className="bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col min-h-0 overflow-hidden transition-all hover:shadow-md cursor-pointer group"
+          >
+            <div className="flex items-center justify-between px-6 pt-6 pb-2 shrink-0">
+              <h3 className="text-lg font-bold text-gray-800">Skenirajte za prisustvo</h3>
+              <div className="flex items-center gap-2 bg-gray-900 group-hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V6a2 2 0 012-2h2M4 16v2a2 2 0 002 2h2m8-16h2a2 2 0 012 2v2m0 8v2a2 2 0 01-2 2h-2" />
+                </svg>
+                Fullscreen
               </div>
-              <span className={`text-4xl font-black tabular-nums ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-700'}`}>
-                {timeLeft}s
-              </span>
+            </div>
+
+            <div className="flex-1 flex items-center justify-center min-h-0 bg-white p-8">
+              <div className="w-full h-full max-h-[400px] aspect-square flex items-center justify-center transition-all duration-500">
+                {token ? (
+                  <QRCodeSVG
+                    value={token}
+                    style={{ width: '100%', height: '100%' }}
+                    level="H"
+                    includeMargin={false}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center text-gray-400">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                    <p className="text-sm font-medium">Generisanje koda...</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="px-6 pb-6 shrink-0">
+              <div className="bg-blue-50 rounded-2xl px-6 py-4 flex items-center justify-between border border-blue-100/50">
+                <div>
+                  <p className="text-blue-400 text-[10px] uppercase tracking-[0.2em] font-black">
+                    Sledeće osvježavanje
+                  </p>
+                  <p className="text-xs text-blue-300 font-medium">Automatska rotacija koda</p>
+                </div>
+                <span className={`text-4xl font-black tabular-nums ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-700'}`}>
+                  {timeLeft}s
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col min-h-0 overflow-hidden transition-all hover:shadow-md">
           <div className="flex justify-between items-center px-6 pt-6 pb-4 shrink-0 border-b border-gray-50">
