@@ -1,5 +1,6 @@
 package com.qrattendance.backend.controller;
 
+import com.qrattendance.backend.dto.SubjectAnalyticsDTO;
 import com.qrattendance.backend.model.*;
 import com.qrattendance.backend.repository.SubjectRepository;
 import com.qrattendance.backend.security.AccessControlService;
@@ -9,9 +10,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigInteger;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @RestController
@@ -27,6 +32,7 @@ public class AnalyticsController {
     @Value("${app.attendance.threshold:70.0}")
     private double defaultThreshold;
 
+    @Transactional
     @GetMapping("/subject/{subjectId}")
     public ResponseEntity<?> getSubjectAnalytics(
             @PathVariable String subjectId,
@@ -51,12 +57,24 @@ public class AnalyticsController {
             return m;
         }).collect(Collectors.toList()));
 
+        // ime i prezime iz baze: fullName se ne moze pouzdano razdvojiti kad ime/prezime ima vise rijeci
+        Map<String, User> studentsByIndex = new HashMap<>();
+        for (User u : subject.getStudents()) {
+            if (u.getIndexNumber() != null) studentsByIndex.putIfAbsent(u.getIndexNumber(), u);
+        }
+
         response.put("studentStats", dto.getStudentStats().stream().map(stat -> {
             Map<String, Object> map = new HashMap<>();
             map.put("index", stat.getIndex());
-            String[] nameParts = stat.getFullName().split(" ", 2);
-            map.put("firstName", nameParts[0]);
-            map.put("lastName", nameParts.length > 1 ? nameParts[1] : "");
+            User u = stat.getIndex() != null ? studentsByIndex.get(stat.getIndex()) : null;
+            if (u != null) {
+                map.put("firstName", u.getFirstName());
+                map.put("lastName", u.getLastName());
+            } else {
+                String[] nameParts = stat.getFullName().split(" ", 2);
+                map.put("firstName", nameParts[0]);
+                map.put("lastName", nameParts.length > 1 ? nameParts[1] : "");
+            }
             map.put("attended", stat.getAttendedCount());
             map.put("percentage", stat.getPercentage());
             map.put("isCritical", stat.isBelowThreshold());
@@ -71,26 +89,64 @@ public class AnalyticsController {
             return point;
         }).collect(Collectors.toList()));
 
-        Map<String, Double> groupStats;
-        if (subject.getStudyYear() != null && subject.getStudyYear() == 1) {
-            groupStats = dto.getGroupStats();
-        } else {
-            List<Subject> allGroups = subjectRepository.findByCode(subject.getCode()).stream()
-                    .filter(s -> s.getCreatedBy() != null
-                            && s.getCreatedBy().getId().equals(subject.getCreatedBy().getId()))
-                    .toList();
-            groupStats = new HashMap<>();
-            for (Subject s : allGroups) {
-                var sDto = analyticsService.getSubjectAnalytics(s.getId(), defaultThreshold);
-                double average = sDto.getStudentStats().stream()
-                        .mapToDouble(stat -> stat.getPercentage())
-                        .average()
-                        .orElse(0.0);
-                groupStats.put(s.getGroupName() != null ? s.getGroupName() : "G-Nepoznato", average);
-            }
-        }
-        response.put("groupStats", groupStats);
+        response.put("groupStats", buildGroupStats(subject, dto));
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Poredjenje prisustva po grupama.
+     *
+     * Grupe istog predmeta su posebni zapisi (npr. Г1-Г4 ili Л1-Л11 nakon automatske podjele prve
+     * godine), pa se porede zapisi koji dijele sifru, tip nastave, akademsku godinu i vlasnika.
+     * Ako je to jedini zapis na prvoj godini (npr. predavanja, nepodijeljen spisak), grupe se
+     * odredjuju po pravilima za indekse unutar tog spiska.
+     */
+    private Map<String, Double> buildGroupStats(Subject subject, SubjectAnalyticsDTO dto) {
+        List<Subject> siblings = subjectRepository.findByCode(subject.getCode()).stream()
+                .filter(s -> s.getCreatedBy() != null
+                        && s.getCreatedBy().getId().equals(subject.getCreatedBy().getId())
+                        && Objects.equals(s.getTeachingType(), subject.getTeachingType())
+                        && Objects.equals(s.getAcademicYear(), subject.getAcademicYear()))
+                .toList();
+
+        Map<String, Double> result = new TreeMap<>(AnalyticsController::compareGroupNames);
+
+        boolean firstYear = subject.getStudyYear() != null && subject.getStudyYear() == 1;
+        if (firstYear && siblings.size() <= 1) {
+            result.putAll(dto.getGroupStats());
+            return result;
+        }
+
+        for (Subject s : siblings) {
+            SubjectAnalyticsDTO sDto = s.getId().equals(subject.getId())
+                    ? dto
+                    : analyticsService.getSubjectAnalytics(s.getId(), defaultThreshold);
+            double average = sDto.getStudentStats().stream()
+                    .mapToDouble(SubjectAnalyticsDTO.StudentStat::getPercentage)
+                    .average()
+                    .orElse(0.0);
+            result.put(s.getGroupName() != null ? s.getGroupName() : "G-Nepoznato", average);
+        }
+        return result;
+    }
+
+    private static final Pattern GROUP_NAME = Pattern.compile("^(.*?)(\\d+)$");
+
+    /** Prirodni redoslijed grupa: Г1, Г2, ..., Л2, Л10; nazivi bez broja (npr. "Ostali") idu na kraj. */
+    private static int compareGroupNames(String a, String b) {
+        Matcher ma = GROUP_NAME.matcher(a);
+        Matcher mb = GROUP_NAME.matcher(b);
+        boolean na = ma.matches();
+        boolean nb = mb.matches();
+        if (na && nb) {
+            int c = ma.group(1).compareTo(mb.group(1));
+            if (c != 0) return c;
+            c = new BigInteger(ma.group(2)).compareTo(new BigInteger(mb.group(2)));
+            return c != 0 ? c : a.compareTo(b);
+        }
+        if (na) return -1;
+        if (nb) return 1;
+        return a.compareTo(b);
     }
 }

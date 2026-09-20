@@ -8,7 +8,7 @@ import java.util.List;
 
 @Repository
 public interface SubjectRepository extends JpaRepository<Subject, String> {
-    
+
     List<Subject> findByCreatedBy(User user);
 
     List<Subject> findByCode(String code);
@@ -17,4 +17,8 @@ public interface SubjectRepository extends JpaRepository<Subject, String> {
 
     boolean existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
         String code, String teachingType, String groupName, String academicYear);
+
+    // duplikat je samo ako ga je isti zaposleni vec uploadovao
+    boolean existsByCodeAndTeachingTypeAndGroupNameAndAcademicYearAndCreatedBy(
+        String code, String teachingType, String groupName, String academicYear, User createdBy);
 }

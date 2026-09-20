@@ -11,6 +11,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -33,6 +34,10 @@ public class SubjectController {
             @RequestBody Subject subject,
             @AuthenticationPrincipal Jwt jwt) {
         User user = userService.getOrCreateUser(jwt);
+        // klijent ne smije birati id (inace bi save prepisao tudji predmet), niti sesije/studente
+        subject.setId(null);
+        subject.setSessions(new ArrayList<>());
+        subject.setStudents(new ArrayList<>());
         subject.setCreatedBy(user);
         return ResponseEntity.ok(subjectService.save(subject));
     }

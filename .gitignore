@@ -1,6 +1,7 @@
 .env
 .env.local
 *.pat
+!.env.example
 
 # Backend
 backend/target/

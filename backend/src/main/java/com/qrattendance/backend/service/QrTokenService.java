@@ -3,24 +3,30 @@ package com.qrattendance.backend.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qrattendance.backend.model.QrToken;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class QrTokenService {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final SimpMessagingTemplate messagingTemplate;
 
     private static final String TOKEN_PREFIX = "qr:token:";
     private static final String SESSION_PREFIX = "qr:session:";
@@ -38,30 +44,21 @@ public class QrTokenService {
         String signature = computeHmac(rawToken + ":" + sessionId);
         String token = rawToken + "." + signature;
 
-        long validitySeconds = qrRefreshIntervalMs / 1000;
+        Duration validity = Duration.ofMillis(qrRefreshIntervalMs);
+        LocalDateTime now = LocalDateTime.now();
 
         QrToken qrToken = new QrToken(
             token,
             sessionId,
-            LocalDateTime.now(),
-            LocalDateTime.now().plusSeconds(validitySeconds),
+            now,
+            now.plus(validity),
             false
         );
 
-        redisTemplate.opsForValue().set(
-            TOKEN_PREFIX + token,
-            qrToken,
-            validitySeconds,
-            TimeUnit.SECONDS
-        );
+        redisTemplate.opsForValue().set(TOKEN_PREFIX + token, qrToken, validity);
+        redisTemplate.opsForValue().set(SESSION_PREFIX + sessionId, token, validity);
 
-        redisTemplate.opsForValue().set(
-            SESSION_PREFIX + sessionId,
-            token,
-            validitySeconds,
-            TimeUnit.SECONDS
-        );
-
+        notifyRotation(sessionId);
         return qrToken;
     }
 
@@ -79,7 +76,9 @@ public class QrTokenService {
         }
 
         String expectedSignature = computeHmac(parts[0] + ":" + qrToken.getSessionId());
-        if (!expectedSignature.equals(parts[1])) {
+        if (!MessageDigest.isEqual(
+                expectedSignature.getBytes(StandardCharsets.UTF_8),
+                parts[1].getBytes(StandardCharsets.UTF_8))) {
             throw new IllegalStateException("Token nije validan");
         }
 
@@ -112,7 +111,36 @@ public class QrTokenService {
         return token != null ? token.toString() : null;
     }
 
+    /**
+     * Trenutni token sesije zajedno sa vlastitim rokom trajanja (isti objekat, pa token i
+     * preostalo vrijeme uvijek pripadaju jedno drugom). Vraca null ako token ne postoji.
+     */
+    public QrToken getCurrentToken(String sessionId) {
+        Object token = redisTemplate.opsForValue().get(SESSION_PREFIX + sessionId);
+        if (token == null) return null;
+        Object obj = redisTemplate.opsForValue().get(TOKEN_PREFIX + token);
+        if (obj == null) return null;
+        return objectMapper.convertValue(obj, QrToken.class);
+    }
+
+    /** Preostalo vrijeme vazenja tokena u milisekundama (serversko vrijeme). */
+    public static long remainingMillis(QrToken token) {
+        return Duration.between(LocalDateTime.now(), token.getExpiresAt()).toMillis();
+    }
+
     public long getRefreshIntervalSeconds() {
         return qrRefreshIntervalMs / 1000;
+    }
+
+    /** Signal live prikazu da povuce novi kod. Ne sadrzi token, pa nista osjetljivo ne ide kroz WebSocket. */
+    private void notifyRotation(String sessionId) {
+        try {
+            messagingTemplate.convertAndSend(
+                "/topic/session/" + sessionId,
+                Map.of("type", "QR_ROTATED", "sessionId", sessionId)
+            );
+        } catch (Exception e) {
+            log.warn("Nije moguće poslati QR_ROTATED za sesiju {}: {}", sessionId, e.getMessage());
+        }
     }
 }

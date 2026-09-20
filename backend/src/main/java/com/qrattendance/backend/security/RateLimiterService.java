@@ -1,35 +1,37 @@
 package com.qrattendance.backend.security;
 
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.time.Duration;
 
+/**
+ * Ogranicavanje broja pokusaja u Redisu (atomican INCR + rok trajanja).
+ * Radi ispravno i sa vise instanci backenda i prezivljava restart; kljucevi sami istjecu.
+ */
 @Service
+@RequiredArgsConstructor
 public class RateLimiterService {
 
     private static final int MAX_REQUESTS = 3;
-    private static final long WINDOW_SECONDS = 30;
+    private static final Duration WINDOW = Duration.ofSeconds(30);
+    private static final String PREFIX = "rl:checkin:";
 
-    private final ConcurrentHashMap<String, AtomicInteger> requestCounts = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, Instant> windowStart = new ConcurrentHashMap<>();
+    private final StringRedisTemplate redis;
 
     public boolean tryConsume(String key) {
-        Instant now = Instant.now();
-        
-        windowStart.putIfAbsent(key, now);
-        requestCounts.putIfAbsent(key, new AtomicInteger(0));
+        String redisKey = PREFIX + key;
+        Long count = redis.opsForValue().increment(redisKey);
+        if (count == null) return false;
 
-        Instant start = windowStart.get(key);
-        
-        // Reset window ako je proslo 30 sekundi
-        if (now.getEpochSecond() - start.getEpochSecond() >= WINDOW_SECONDS) {
-            windowStart.put(key, now);
-            requestCounts.put(key, new AtomicInteger(0));
+        // prvi zahtjev otvara prozor; ako je ključ ostao bez roka (pad između INCR i EXPIRE), popravi
+        if (count == 1) {
+            redis.expire(redisKey, WINDOW);
+        } else {
+            Long ttl = redis.getExpire(redisKey);
+            if (ttl == null || ttl < 0) redis.expire(redisKey, WINDOW);
         }
-
-        int count = requestCounts.get(key).incrementAndGet();
         return count <= MAX_REQUESTS;
     }
 }

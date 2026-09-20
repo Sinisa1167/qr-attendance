@@ -106,7 +106,7 @@ public class ExportService {
                 row.createCell(3).setCellValue(safe(a.getStudent().getIndexNumber()));
                 row.createCell(4).setCellValue(safe(a.getStudent().getEmail()));
                 row.createCell(5).setCellValue(a.getCheckInTime() != null ?
-                        a.getCheckInTime().toLocalTime().toString().substring(0, 8) : "/");
+                        a.getCheckInTime().toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) : "/");
             }
 
             // Fiksne širine kolona
@@ -250,7 +250,7 @@ public class ExportService {
             addPdfCell(table, safe(a.getStudent().getIndexNumber()), smallFont, BaseColor.WHITE);
             addPdfCell(table, safe(a.getStudent().getEmail()), smallFont, BaseColor.WHITE);
             addPdfCell(table, a.getCheckInTime() != null ?
-                    a.getCheckInTime().toLocalTime().toString().substring(0, 8) : "/",
+                    a.getCheckInTime().toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) : "/",
                     smallFont, BaseColor.WHITE);
         }
 

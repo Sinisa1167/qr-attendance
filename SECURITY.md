@@ -52,3 +52,15 @@ to primijeti i kaže mu da prisustvo nije upisano, umjesto da ga ostavi u neizvj
 
 Sve greške na serveru (nepostojeći resurs, nedozvoljen pristup, loš zahtjev) vraćaju
 odgovarajući HTTP status sa razumljivom porukom, ne generičku grešku sa stack traceom.
+
+## Mrežna izloženost
+
+Van računara na kojem radi Docker dostupna su samo dva porta: 3000 (aplikacija, kroz nginx)
+i 8080 (Keycloak, potreban da se preglednik može prijaviti). Backend (8081), config-server
+(8888), PostgreSQL (5432) i Redis (6379) vezani su samo na 127.0.0.1: mogu im pristupiti alati
+i skripte sa istog računara, ali ne uređaji na lokalnoj mreži. Kontejneri međusobno
+komuniciraju kroz internu Docker mrežu.
+
+To je važno zbog Redisa (u njemu je trenutni QR kod) i config-servera (vraća konfiguraciju,
+uključujući tajne vrijednosti). Da su dostupni na mreži, neko bi mogao pročitati QR kod bez
+dolaska na nastavu.

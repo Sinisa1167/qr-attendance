@@ -46,6 +46,14 @@ public class SessionController {
         Subject subject = accessControlService.requireOwnedSubject(session.getSubject().getId(), jwt);
         session.setSubject(subject);
 
+        // klijent ne odredjuje id/status: sesija uvijek nastaje kao CREATED, a aktivira se samo kroz /activate
+        session.setId(null);
+        session.setStatus(Session.SessionStatus.CREATED);
+        session.setCreatedAt(null);
+        session.setActivatedAt(null);
+        session.setClosedAt(null);
+        session.setAttendanceList(null);
+
         return ResponseEntity.ok(sessionService.createSession(session));
     }
 
@@ -106,16 +114,19 @@ public class SessionController {
             return ResponseEntity.badRequest().body(Map.of("error", "Sesija nije aktivna"));
         }
 
-        String currentToken = qrTokenService.getCurrentTokenForSession(sessionId);
-        if (currentToken == null) {
-            QrToken token = qrTokenService.generateToken(sessionId);
-            currentToken = token.getToken();
+        // Token i preostalo vrijeme dolaze iz istog objekta, pa se ne mogu razici.
+        QrToken current = qrTokenService.getCurrentToken(sessionId);
+        if (current == null || QrTokenService.remainingMillis(current) <= 0) {
+            current = qrTokenService.generateToken(sessionId);
         }
 
+        long remainingMs = Math.max(0, QrTokenService.remainingMillis(current));
+
         return ResponseEntity.ok(Map.of(
-                "token", currentToken,
+                "token", current.getToken(),
                 "sessionId", sessionId,
-                "expiresIn", qrTokenService.getRefreshIntervalSeconds()
+                "expiresIn", (remainingMs + 999) / 1000,
+                "expiresInMs", remainingMs
         ));
     }
 }

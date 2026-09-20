@@ -1,23 +1,26 @@
+x-app-env: &app-env
+  POSTGRES_HOST: postgres
+  POSTGRES_DB: ${POSTGRES_DB:-qrattendance}
+  POSTGRES_USER: ${POSTGRES_USER:-qruser}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qrpassword123}
+  REDIS_HOST: redis
+  KEYCLOAK_REALM: ${KEYCLOAK_REALM:-qr-attendance}
+  KEYCLOAK_ISSUER_URI: http://${HOST_IP:-localhost}:8080/realms/${KEYCLOAK_REALM:-qr-attendance}
+  QR_REFRESH_INTERVAL: ${QR_REFRESH_INTERVAL:-30000}
+  QR_SECRET: ${QR_SECRET:-demo-qr-secret-promijeni-u-produkciji-0123456789abcdef}
+  ATTENDANCE_THRESHOLD: ${ATTENDANCE_THRESHOLD:-70.0}
+  STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN:-student.etf.unibl.org}
+  EMPLOYEE_EMAIL_DOMAIN: ${EMPLOYEE_EMAIL_DOMAIN:-etf.unibl.org}
+
 services:
   config-server:
     build: ./config-server
     container_name: qr-config-server
     restart: unless-stopped
     ports:
-      - "8888:8888"
+      - "127.0.0.1:8888:8888"   # samo sa ovog racunara, nikad sa LAN
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_HOST: postgres
-      REDIS_HOST: redis
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
-      KEYCLOAK_ISSUER_URI: http://${HOST_IP}:8080/realms/${KEYCLOAK_REALM}
-      QR_REFRESH_INTERVAL: ${QR_REFRESH_INTERVAL}
-      QR_SECRET: ${QR_SECRET}
-      ATTENDANCE_THRESHOLD: ${ATTENDANCE_THRESHOLD}
-      STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN}
-      EMPLOYEE_EMAIL_DOMAIN: ${EMPLOYEE_EMAIL_DOMAIN}
+      <<: *app-env
     networks:
       - qr-network
     healthcheck:
@@ -41,21 +44,10 @@ services:
       keycloak:
         condition: service_started
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
     environment:
+      <<: *app-env
       SPRING_PROFILES_ACTIVE: docker
-      POSTGRES_HOST: postgres
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      REDIS_HOST: redis
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
-      KEYCLOAK_ISSUER_URI: http://${HOST_IP}:8080/realms/${KEYCLOAK_REALM}
-      QR_REFRESH_INTERVAL: ${QR_REFRESH_INTERVAL}
-      QR_SECRET: ${QR_SECRET}
-      ATTENDANCE_THRESHOLD: ${ATTENDANCE_THRESHOLD}
-      STUDENT_EMAIL_DOMAIN: ${STUDENT_EMAIL_DOMAIN}
-      EMPLOYEE_EMAIL_DOMAIN: ${EMPLOYEE_EMAIL_DOMAIN}
     networks:
       - qr-network
     healthcheck:
@@ -74,9 +66,9 @@ services:
     ports:
       - "3000:80"
     environment:
-      KEYCLOAK_URL: http://${HOST_IP}:8080
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
-      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+      KEYCLOAK_URL: http://${HOST_IP:-localhost}:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-qr-attendance}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-qr-attendance-app}
     networks:
       - qr-network
 
@@ -85,18 +77,18 @@ services:
     container_name: qr-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-qrattendance}
+      POSTGRES_USER: ${POSTGRES_USER:-qruser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qrpassword123}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - qr-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qruser} -d ${POSTGRES_DB:-qrattendance}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -106,7 +98,7 @@ services:
     container_name: qr-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     networks:
       - qr-network
     healthcheck:
@@ -120,12 +112,13 @@ services:
     container_name: qr-keycloak
     restart: unless-stopped
     environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin123}
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB}
-      KC_DB_USERNAME: ${POSTGRES_USER}
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      # init-db.sql kreira bazu "keycloak", zato default ne treba mijenjati
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB:-keycloak}
+      KC_DB_USERNAME: ${POSTGRES_USER:-qruser}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-qrpassword123}
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HTTP_ENABLED: "true"

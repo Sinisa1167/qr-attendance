@@ -146,8 +146,8 @@ public class ExcelParserService {
             List<User> grpStudents = entry.getValue();
             if (grpStudents.isEmpty()) continue;
 
-            if (subjectService.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
-                    code, teachingType, grpName, academicYear)) {
+            // IZMJENA: duplikat je samo ako ga je isti zaposleni vec uploadovao
+            if (subjectService.existsForOwner(code, teachingType, grpName, academicYear, createdBy)) {
                 continue; // preskoči već postojeće grupe
             }
 
@@ -174,8 +174,8 @@ public class ExcelParserService {
             String teachingType, String groupName, String academicYear,
             List<User> students, User createdBy) {
 
-        if (subjectService.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
-                code, teachingType, groupName, academicYear)) {
+        // IZMJENA: provjera po vlasniku
+        if (subjectService.existsForOwner(code, teachingType, groupName, academicYear, createdBy)) {
             throw new IllegalArgumentException(
                     String.format("Predmet '%s' (Grupa: %s, Tip: %s) već postoji za akademsku godinu %s.",
                             name, groupName, teachingType, academicYear));
@@ -316,19 +316,27 @@ public class ExcelParserService {
         return students;
     }
 
+    // IZMJENA: postojeci korisnik (npr. kreiran prijavom prije uploada) dobija indeks i status iz liste
     private User getOrCreateStudent(String firstName, String lastName,
                                      String indexNumber, String studentStatus) {
         String email = generateEmail(firstName, lastName);
         return userService.findByEmail(email)
                 .map(existing -> {
+                    boolean changed = false;
                     if (existing.getFirstName() == null || existing.getFirstName().isBlank()) {
                         existing.setFirstName(firstName);
                         existing.setLastName(lastName);
-                        existing.setIndexNumber(indexNumber);
-                        existing.setStudentStatus(studentStatus);
-                        return userService.save(existing);
+                        changed = true;
                     }
-                    return existing;
+                    if (existing.getIndexNumber() == null || existing.getIndexNumber().isBlank()) {
+                        existing.setIndexNumber(indexNumber);
+                        changed = true;
+                    }
+                    if (!studentStatus.isBlank() && !studentStatus.equals(existing.getStudentStatus())) {
+                        existing.setStudentStatus(studentStatus);
+                        changed = true;
+                    }
+                    return changed ? userService.save(existing) : existing;
                 })
                 .orElseGet(() -> {
                     User newUser = new User();
@@ -423,6 +431,7 @@ public class ExcelParserService {
                 .replace("с", "s").replace("т", "t").replace("ћ", "c").replace("у", "u")
                 .replace("ф", "f").replace("х", "h").replace("ц", "c").replace("č", "c")
                 .replace("ć", "c").replace("ž", "z").replace("š", "s").replace("đ", "dj")
+                .replace("Đ", "Dj")
                 .replace("ч", "c").replace("џ", "dz").replace("ш", "s");
     }
 }

@@ -49,4 +49,10 @@ public class SubjectService {
         return subjectRepository.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
                 code, teachingType, groupName, academicYear);
     }
+
+    public boolean existsForOwner(
+            String code, String teachingType, String groupName, String academicYear, User owner) {
+        return subjectRepository.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYearAndCreatedBy(
+                code, teachingType, groupName, academicYear, owner);
+    }
 }

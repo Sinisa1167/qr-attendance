@@ -17,6 +17,12 @@ function LiveSession() {
 
   const countdownRef = useRef(null)
   const stompClientRef = useRef(null)
+  const deadlineRef = useRef(0)        // kad trenutni kod istice (po serverskom preostalom vremenu)
+  const fetchingRef = useRef(false)    // ne povlači token dvaput istovremeno
+  const pendingRef = useRef(false)     // stigao je novi zahtjev dok je jedan u toku
+  const retryRef = useRef(null)
+  const connectedOnceRef = useRef(false)
+  const attendanceTimerRef = useRef(null)
 
   useEffect(() => {
     fetchToken()
@@ -25,6 +31,8 @@ function LiveSession() {
 
     return () => {
       clearInterval(countdownRef.current)
+      clearTimeout(retryRef.current)
+      clearTimeout(attendanceTimerRef.current)
       if (stompClientRef.current) {
         stompClientRef.current.deactivate()
       }
@@ -37,6 +45,12 @@ function LiveSession() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // više prijava u nizu (npr. 100 studenata odjednom) daju jedno osvježavanje liste, ne stotinu
+  const refreshAttendanceSoon = () => {
+    clearTimeout(attendanceTimerRef.current)
+    attendanceTimerRef.current = setTimeout(fetchAttendance, 300)
+  }
+
   const connectWebSocket = () => {
     const client = new Client({
       webSocketFactory: () => new SockJS('/ws'),
@@ -45,9 +59,18 @@ function LiveSession() {
         client.subscribe(`/topic/session/${sessionId}`, (message) => {
           const data = JSON.parse(message.body)
           if (data.type === 'NEW_ATTENDANCE') {
-            fetchAttendance()
+            refreshAttendanceSoon()
+          } else if (data.type === 'QR_ROTATED') {
+            // server je promijenio kod: odmah povuci novi
+            fetchToken()
           }
         })
+        // nakon ponovnog spajanja mogli smo propustiti rotaciju
+        if (connectedOnceRef.current) {
+          fetchToken()
+          fetchAttendance()
+        }
+        connectedOnceRef.current = true
       },
       onStompError: (frame) => {
         console.error('STOMP error:', frame)
@@ -57,20 +80,48 @@ function LiveSession() {
     stompClientRef.current = client
   }
 
+  // Brojač prati rok koji je odredio server (deadline), a ne vlastito brojanje sekundi.
+  const startCountdown = () => {
+    clearInterval(countdownRef.current)
+    countdownRef.current = setInterval(() => {
+      const left = deadlineRef.current - Date.now()
+      if (left <= 0) {
+        clearInterval(countdownRef.current)
+        fetchToken() // rok je istekao, server je vec rotirao (ili ce odmah)
+      } else {
+        setTimeLeft(Math.ceil(left / 1000))
+      }
+    }, 250)
+  }
+
   const fetchToken = async () => {
+    if (fetchingRef.current) {
+      pendingRef.current = true
+      return
+    }
+    fetchingRef.current = true
+    clearTimeout(retryRef.current)
     try {
       const res = await api.get(`/api/admin/sessions/${sessionId}/token`)
-      const newToken = res.data.token
-      const duration = parseInt(res.data.expiresIn) || 30
-      setToken(newToken)
-      setTimeLeft(duration)
-      startCountdown(duration)
+      const ms = Number(res.data.expiresInMs) || (parseInt(res.data.expiresIn) || 30) * 1000
+      setToken(res.data.token)
+      deadlineRef.current = Date.now() + ms
+      setTimeLeft(Math.ceil(ms / 1000))
+      startCountdown()
     } catch (err) {
       if (err.response?.status === 400) {
         setSessionClosed(true)
         clearInterval(countdownRef.current)
       } else {
         console.error("Greška pri preuzimanju tokena:", err)
+        // privremena greška (npr. Redis pao): ne ostavljaj zamrznut kod, pokušaj ponovo
+        retryRef.current = setTimeout(fetchToken, 2000)
+      }
+    } finally {
+      fetchingRef.current = false
+      if (pendingRef.current) {
+        pendingRef.current = false
+        fetchToken()
       }
     }
   }
@@ -82,20 +133,6 @@ function LiveSession() {
     } catch (err) {
       console.error("Greška pri osvježavanju liste:", err)
     }
-  }
-
-  const startCountdown = (initialTime) => {
-    if (countdownRef.current) clearInterval(countdownRef.current)
-    let t = initialTime
-    countdownRef.current = setInterval(() => {
-      t -= 1
-      if (t <= 0) {
-        clearInterval(countdownRef.current)
-        fetchToken()
-      } else {
-        setTimeLeft(t)
-      }
-    }, 1000)
   }
 
   const closeSession = async () => {
@@ -147,7 +184,7 @@ function LiveSession() {
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shrink-0 flex items-center justify-between">
           <p className="text-amber-700 font-bold">Sesija je zatvorena (istekao je termin ili je zatvorena ranije). Prijave više nisu moguće.</p>
           <button
-            onClick={() => navigate('/sessions')}
+            onClick={() => navigate(-1)}
             className="text-amber-700 font-bold underline hover:text-amber-900"
           >
             Nazad na listu sesija
