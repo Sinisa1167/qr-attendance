@@ -20,7 +20,6 @@ import java.util.Map;
 public class SessionController {
 
     private final SessionService sessionService;
-    private final SubjectService subjectService;
     private final QrTokenService qrTokenService;
     private final QrSchedulerService qrSchedulerService;
     private final AccessControlService accessControlService;

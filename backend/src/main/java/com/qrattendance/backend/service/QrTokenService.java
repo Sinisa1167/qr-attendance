@@ -106,11 +106,6 @@ public class QrTokenService {
         }
     }
 
-    public String getCurrentTokenForSession(String sessionId) {
-        Object token = redisTemplate.opsForValue().get(SESSION_PREFIX + sessionId);
-        return token != null ? token.toString() : null;
-    }
-
     /**
      * Trenutni token sesije zajedno sa vlastitim rokom trajanja (isti objekat, pa token i
      * preostalo vrijeme uvijek pripadaju jedno drugom). Vraca null ako token ne postoji.
@@ -128,9 +123,6 @@ public class QrTokenService {
         return Duration.between(LocalDateTime.now(), token.getExpiresAt()).toMillis();
     }
 
-    public long getRefreshIntervalSeconds() {
-        return qrRefreshIntervalMs / 1000;
-    }
 
     /** Signal live prikazu da povuce novi kod. Ne sadrzi token, pa nista osjetljivo ne ide kroz WebSocket. */
     private void notifyRotation(String sessionId) {

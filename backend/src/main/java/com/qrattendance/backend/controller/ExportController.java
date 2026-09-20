@@ -5,7 +5,6 @@ import com.qrattendance.backend.model.Subject;
 import com.qrattendance.backend.security.AccessControlService;
 import com.qrattendance.backend.service.ExportService;
 import com.qrattendance.backend.service.SessionService;
-import com.qrattendance.backend.service.SubjectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -24,7 +23,6 @@ public class ExportController {
 
     private final ExportService exportService;
     private final SessionService sessionService;
-    private final SubjectService subjectService;
     private final AccessControlService accessControlService;
 
     @Transactional

@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
-    private final SubjectService subjectService;
     private final SubjectRepository subjectRepository;
     private final AccessControlService accessControlService;
 

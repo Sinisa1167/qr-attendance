@@ -15,9 +15,6 @@ public interface SubjectRepository extends JpaRepository<Subject, String> {
 
     boolean existsByIdAndStudents_Id(String subjectId, String studentId);
 
-    boolean existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
-        String code, String teachingType, String groupName, String academicYear);
-
     // duplikat je samo ako ga je isti zaposleni vec uploadovao
     boolean existsByCodeAndTeachingTypeAndGroupNameAndAcademicYearAndCreatedBy(
         String code, String teachingType, String groupName, String academicYear, User createdBy);

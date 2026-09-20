@@ -36,20 +36,6 @@ public class SubjectService {
         return subjectRepository.existsByIdAndStudents_Id(subjectId, studentId);
     }
 
-    public Subject enrollStudent(Subject subject, User student) {
-        if (!isStudentEnrolled(subject.getId(), student.getId())) {
-            subject.getStudents().add(student);
-            return subjectRepository.save(subject);
-        }
-        return subject;
-    }
-
-    public boolean existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
-            String code, String teachingType, String groupName, String academicYear) {
-        return subjectRepository.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYear(
-                code, teachingType, groupName, academicYear);
-    }
-
     public boolean existsForOwner(
             String code, String teachingType, String groupName, String academicYear, User owner) {
         return subjectRepository.existsByCodeAndTeachingTypeAndGroupNameAndAcademicYearAndCreatedBy(

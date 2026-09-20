@@ -282,7 +282,7 @@ function LiveSession() {
                       </span>
                       <button
                         onClick={(e) => deleteEntry(e, entry.id)}
-                        className="text-[10px] font-bold text-red-400 hover:text-red-600 uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-all"
+                        className="text-[10px] font-bold text-red-400 hover:text-red-600 uppercase tracking-tighter py-1 opacity-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all"
                       >
                         Ukloni
                       </button>
